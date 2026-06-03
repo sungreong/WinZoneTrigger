@@ -167,13 +167,18 @@ powershell -NoProfile -Command "Write-Output hello"
 
 ## 설치
 
-설치 파일은 아래 위치에 만들어집니다.
+최신 설치 파일은 GitHub Releases에서 받을 수 있습니다.
+
+- 다운로드: [WinZoneTrigger Releases](https://github.com/sungreong/WinZoneTrigger/releases/latest)
+- 파일명: `WinZoneTrigger_Setup.exe`
+
+`WinZoneTrigger_Setup.exe`를 실행하면 현재 사용자 계정에 앱이 설치되고, 시작 메뉴 바로가기, Windows 시작 시 자동 실행, Windows 앱 제거 항목이 등록됩니다.
+
+저장소를 직접 빌드한 경우 설치 파일은 아래 위치에 만들어집니다.
 
 ```text
 dist\WinZoneTrigger_Setup.exe
 ```
-
-`WinZoneTrigger_Setup.exe`를 실행하면 현재 사용자 계정에 앱이 설치되고, 시작 메뉴 바로가기, Windows 시작 시 자동 실행, Windows 앱 제거 항목이 등록됩니다.
 
 설치 위치:
 
