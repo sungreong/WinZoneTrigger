@@ -1,0 +1,6 @@
+.agents/
+dist/ui-check.png
+*.tmp
+*.log
+*.user
+Thumbs.db
