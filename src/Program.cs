@@ -3595,6 +3595,21 @@ namespace WinZoneTrigger
             _config.AppWatchIntervalUnit = firstAppWatchZone == null ? "Minutes" : firstAppWatchZone.AppWatchIntervalUnit;
         }
 
+        private static void RestoreDetectionCondition(ZoneRule target, ZoneRule source)
+        {
+            if (target == null || source == null)
+            {
+                return;
+            }
+
+            target.UseCoordinates = source.UseCoordinates;
+            target.Latitude = source.Latitude;
+            target.Longitude = source.Longitude;
+            target.RadiusMeters = source.RadiusMeters;
+            target.NearbySsids = source.NearbySsids == null ? new List<string>() : new List<string>(source.NearbySsids);
+            target.RequireAllSsids = source.RequireAllSsids;
+        }
+
         private void SetCoordinateInputsEnabled()
         {
             bool enabled = _useCoordinatesCheck != null && _useCoordinatesCheck.Checked;
@@ -4113,6 +4128,13 @@ namespace WinZoneTrigger
 
         private void SetSelectedZoneOperating(bool operating)
         {
+            ZoneRule conditionSnapshot = null;
+            ZoneRule selectedBeforeCapture = GetSelectedZone();
+            if (selectedBeforeCapture != null)
+            {
+                conditionSnapshot = selectedBeforeCapture.Clone();
+            }
+
             CaptureCurrentZone();
             CaptureGlobalSettings();
 
@@ -4121,6 +4143,11 @@ namespace WinZoneTrigger
             {
                 MessageBox.Show(this, "운영 상태를 바꿀 위치를 먼저 선택하세요.", operating ? "운영하기" : "운영 안함", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
+            }
+
+            if (conditionSnapshot != null && string.Equals(conditionSnapshot.Id, selected.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                RestoreDetectionCondition(selected, conditionSnapshot);
             }
 
             selected.Enabled = operating;
@@ -5530,6 +5557,20 @@ $culture = [Globalization.CultureInfo]::InvariantCulture
                 return;
             }
 
+            if (string.Equals(value, "Teams", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "Microsoft Teams", StringComparison.OrdinalIgnoreCase))
+            {
+                if (TryLaunchMicrosoftTeams())
+                {
+                    log("앱 실행 성공: Microsoft Teams");
+                }
+                else
+                {
+                    log("앱 실행 실패: Microsoft Teams 앱을 찾지 못했습니다. 설치되어 있거나 시작 메뉴에 보여야 합니다.");
+                }
+                return;
+            }
+
             if (string.Equals(value, "Docker", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(value, "Docker Desktop", StringComparison.OrdinalIgnoreCase))
             {
@@ -5548,8 +5589,14 @@ $culture = [Globalization.CultureInfo]::InvariantCulture
 
             if (File.Exists(value) || Directory.Exists(value) || LooksLikeShellTarget(value))
             {
-                StartShellTarget(value);
-                log("앱 실행 성공: " + value);
+                if (TryLaunchTargetWithFallback(value))
+                {
+                    log("앱 실행 성공: " + value);
+                }
+                else
+                {
+                    log("앱 실행 실패: 앱을 찾았지만 실행하지 못했습니다: " + value);
+                }
                 return;
             }
 
@@ -5800,7 +5847,7 @@ $app = Get-StartApps |
     Where-Object { $_.Name -eq $name -or $_.Name -like ('*' + $name + '*') } |
     Select-Object -First 1
 if ($null -eq $app) { exit 3 }
-Start-Process ('shell:AppsFolder\' + $app.AppID)
+Start-Process explorer.exe -ArgumentList ('shell:AppsFolder\' + $app.AppID)
 ";
                 script = script.Replace("__APP_NAME__", PowerShellStringLiteral(appName));
                 string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
@@ -5817,6 +5864,19 @@ Start-Process ('shell:AppsFolder\' + $app.AppID)
             }
         }
 
+        private static bool TryLaunchMicrosoftTeams()
+        {
+            return TryLaunchStartMenuApp("Microsoft Teams")
+                || TryLaunchStartMenuApp("Teams")
+                || TryStartAppsFolderTarget(@"shell:AppsFolder\MSTeams_8wekyb3d8bbwe!MSTeams")
+                || TryStartShellTarget(Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    @"Microsoft\Windows\Start Menu\Programs\Microsoft Teams.lnk"))
+                || TryStartShellTarget(Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                    @"Microsoft\Windows\Start Menu\Programs\Microsoft Teams.lnk"));
+        }
+
         private static bool TryLaunchCommonPath(string path)
         {
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
@@ -5824,7 +5884,7 @@ Start-Process ('shell:AppsFolder\' + $app.AppID)
                 return false;
             }
 
-            return TryStartShellTarget(path);
+            return TryLaunchTargetWithFallback(path);
         }
 
         private static string GetLocalPath(string relativePath)
@@ -5855,6 +5915,77 @@ Start-Process ('shell:AppsFolder\' + $app.AppID)
             }
         }
 
+        private static bool TryLaunchTargetWithFallback(string target)
+        {
+            string value = (target ?? "").Trim();
+            if (value.Length == 0)
+            {
+                return false;
+            }
+
+            if (value.StartsWith(@"shell:AppsFolder\", StringComparison.OrdinalIgnoreCase))
+            {
+                return TryStartAppsFolderTarget(value) || TryStartShellTarget(value);
+            }
+
+            if (TryStartShellTarget(value))
+            {
+                return true;
+            }
+
+            if (IsShortcutPath(value))
+            {
+                string shortcutName = "";
+                try
+                {
+                    shortcutName = Path.GetFileNameWithoutExtension(value);
+                }
+                catch
+                {
+                }
+
+                ShortcutInfo shortcut = ReadShortcut(value);
+                if (IsTeamsShortcut(shortcutName, shortcut))
+                {
+                    return TryLaunchMicrosoftTeams();
+                }
+
+                if (!string.IsNullOrWhiteSpace(shortcutName) && TryLaunchStartMenuApp(shortcutName))
+                {
+                    return true;
+                }
+
+                if (shortcut != null && !string.IsNullOrWhiteSpace(shortcut.TargetPath) && File.Exists(shortcut.TargetPath))
+                {
+                    return TryStartShellTarget(shortcut.TargetPath);
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryStartAppsFolderTarget(string target)
+        {
+            return TryStartProcess(Path.Combine(Environment.SystemDirectory, "explorer.exe"), target);
+        }
+
+        private static bool TryStartProcess(string fileName, string arguments)
+        {
+            try
+            {
+                ProcessStartInfo startInfo = new ProcessStartInfo();
+                startInfo.FileName = fileName;
+                startInfo.Arguments = QuoteArgument(arguments);
+                startInfo.UseShellExecute = false;
+                Process.Start(startInfo);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private static void StartShellTarget(string target)
         {
             ProcessStartInfo startInfo = new ProcessStartInfo();
@@ -5870,6 +6001,86 @@ Start-Process ('shell:AppsFolder\' + $app.AppID)
                 || target.StartsWith("ms-", StringComparison.OrdinalIgnoreCase);
         }
 
+        private static bool IsShortcutPath(string target)
+        {
+            try
+            {
+                return string.Equals(Path.GetExtension(target), ".lnk", StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsTeamsShortcut(string shortcutName, ShortcutInfo shortcut)
+        {
+            string name = shortcutName ?? "";
+            string target = shortcut == null ? "" : shortcut.TargetPath ?? "";
+            return name.IndexOf("Teams", StringComparison.OrdinalIgnoreCase) >= 0
+                || target.IndexOf("MSTeams", StringComparison.OrdinalIgnoreCase) >= 0
+                || target.IndexOf("ms-teams", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static ShortcutInfo ReadShortcut(string shortcutPath)
+        {
+            object shell = null;
+            object shortcut = null;
+            try
+            {
+                Type shellType = Type.GetTypeFromProgID("WScript.Shell");
+                if (shellType == null)
+                {
+                    return null;
+                }
+
+                shell = Activator.CreateInstance(shellType);
+                shortcut = shellType.InvokeMember(
+                    "CreateShortcut",
+                    System.Reflection.BindingFlags.InvokeMethod,
+                    null,
+                    shell,
+                    new object[] { shortcutPath });
+
+                if (shortcut == null)
+                {
+                    return null;
+                }
+
+                Type shortcutType = shortcut.GetType();
+                return new ShortcutInfo
+                {
+                    TargetPath = Convert.ToString(shortcutType.InvokeMember(
+                        "TargetPath",
+                        System.Reflection.BindingFlags.GetProperty,
+                        null,
+                        shortcut,
+                        null)),
+                    Arguments = Convert.ToString(shortcutType.InvokeMember(
+                        "Arguments",
+                        System.Reflection.BindingFlags.GetProperty,
+                        null,
+                        shortcut,
+                        null))
+                };
+            }
+            catch
+            {
+                return null;
+            }
+            finally
+            {
+                if (shortcut != null && Marshal.IsComObject(shortcut))
+                {
+                    Marshal.ReleaseComObject(shortcut);
+                }
+                if (shell != null && Marshal.IsComObject(shell))
+                {
+                    Marshal.ReleaseComObject(shell);
+                }
+            }
+        }
+
         private static string QuoteArgument(string value)
         {
             return "\"" + (value ?? "").Replace("\"", "\\\"") + "\"";
@@ -5878,6 +6089,12 @@ Start-Process ('shell:AppsFolder\' + $app.AppID)
         private static string PowerShellStringLiteral(string value)
         {
             return "'" + (value ?? "").Replace("'", "''") + "'";
+        }
+
+        private sealed class ShortcutInfo
+        {
+            public string TargetPath { get; set; }
+            public string Arguments { get; set; }
         }
     }
 
