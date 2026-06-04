@@ -36,6 +36,7 @@ namespace WinZoneTrigger
         public int ScanIntervalSeconds { get; set; }
         public bool StartMinimized { get; set; }
         public bool AppWatchEnabled { get; set; }
+        public bool? AppWatchRequireWindow { get; set; }
         public string AppWatchProcessName { get; set; }
         public string AppWatchLaunchTarget { get; set; }
         public int AppWatchIntervalValue { get; set; }
@@ -51,6 +52,7 @@ namespace WinZoneTrigger
                 ScanIntervalSeconds = 30,
                 StartMinimized = true,
                 AppWatchEnabled = false,
+                AppWatchRequireWindow = false,
                 AppWatchProcessName = "",
                 AppWatchLaunchTarget = "",
                 AppWatchIntervalValue = 5,
@@ -132,6 +134,7 @@ namespace WinZoneTrigger
             {
                 ZoneRule firstZone = Zones.FirstOrDefault(z => z.Enabled) ?? Zones[0];
                 firstZone.AppWatchEnabled = true;
+                firstZone.AppWatchRequireWindow = AppWatchRequireWindow;
                 firstZone.AppWatchLaunchTarget = AppWatchLaunchTarget;
                 firstZone.AppWatchProcessName = AppWatchProcessName;
                 firstZone.AppWatchIntervalValue = AppWatchIntervalValue;
@@ -150,6 +153,7 @@ namespace WinZoneTrigger
         public bool? MonitoringEnabled { get; set; }
         public int ScanIntervalSeconds { get; set; }
         public bool? AppWatchEnabled { get; set; }
+        public bool? AppWatchRequireWindow { get; set; }
         public string AppWatchProcessName { get; set; }
         public string AppWatchLaunchTarget { get; set; }
         public int AppWatchIntervalValue { get; set; }
@@ -179,6 +183,7 @@ namespace WinZoneTrigger
                 MonitoringEnabled = false,
                 ScanIntervalSeconds = 30,
                 AppWatchEnabled = false,
+                AppWatchRequireWindow = false,
                 AppWatchProcessName = "",
                 AppWatchLaunchTarget = "",
                 AppWatchIntervalValue = 5,
@@ -210,6 +215,7 @@ namespace WinZoneTrigger
                 MonitoringEnabled = MonitoringEnabled,
                 ScanIntervalSeconds = ScanIntervalSeconds,
                 AppWatchEnabled = AppWatchEnabled,
+                AppWatchRequireWindow = AppWatchRequireWindow,
                 AppWatchProcessName = AppWatchProcessName,
                 AppWatchLaunchTarget = AppWatchLaunchTarget,
                 AppWatchIntervalValue = AppWatchIntervalValue,
@@ -273,6 +279,11 @@ namespace WinZoneTrigger
             if (!AppWatchEnabled.HasValue)
             {
                 AppWatchEnabled = false;
+            }
+
+            if (!AppWatchRequireWindow.HasValue)
+            {
+                AppWatchRequireWindow = ShouldRequireWindowByDefault(AppWatchProcessName, AppWatchLaunchTarget);
             }
 
             if (AppWatchProcessName == null)
@@ -355,6 +366,49 @@ namespace WinZoneTrigger
             {
                 AudioAction = "None";
             }
+        }
+
+        public static bool ShouldRequireWindowByDefault(string processName, string launchTarget)
+        {
+            string normalizedProcessName = NormalizeAppWatchName(processName);
+            string normalizedLaunchTarget = NormalizeAppWatchName(launchTarget);
+            return string.Equals(normalizedProcessName, "Codex", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(normalizedLaunchTarget, "Codex", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizeAppWatchName(string value)
+        {
+            string name = (value ?? "").Trim().Trim('"');
+            if (name.Length == 0)
+            {
+                return "";
+            }
+
+            try
+            {
+                string fileName = Path.GetFileName(name);
+                if (!string.IsNullOrWhiteSpace(fileName))
+                {
+                    name = fileName;
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                string extension = Path.GetExtension(name);
+                if (!string.IsNullOrWhiteSpace(extension))
+                {
+                    name = Path.GetFileNameWithoutExtension(name);
+                }
+            }
+            catch
+            {
+            }
+
+            return name.Trim();
         }
     }
 
@@ -479,6 +533,7 @@ namespace WinZoneTrigger
         private readonly bool _startedFromWindowsStartup;
         private readonly Dictionary<string, bool> _insideZones;
         private readonly Dictionary<string, DateTime> _lastAppWatchChecks;
+        private readonly Dictionary<string, string> _lastAppWatchStatusTexts;
         private readonly System.Windows.Forms.Timer _scanTimer;
         private readonly System.Windows.Forms.Timer _startupRetryTimer;
         private readonly System.Windows.Forms.Timer _appWatchTimer;
@@ -491,6 +546,7 @@ namespace WinZoneTrigger
         private int _startupRetryAttemptsRemaining;
         private int _startupRetryAttemptsTotal;
         private bool _lastScanHadActiveZone;
+        private DateTime? _appWatchTimerStartedAtLocal;
         private string _currentZoneId;
 
         private NotifyIcon _trayIcon;
@@ -539,6 +595,7 @@ namespace WinZoneTrigger
         private FlowLayoutPanel _appLaunchChipsPanel;
         private string _selectedAppLaunch;
         private CheckBox _appWatchEnabledCheck;
+        private CheckBox _appWatchRequireWindowCheck;
         private TextBox _appWatchTargetText;
         private TextBox _appWatchProcessText;
         private NumericUpDown _appWatchIntervalInput;
@@ -580,6 +637,7 @@ namespace WinZoneTrigger
             _startedFromWindowsStartup = startedFromWindowsStartup;
             _insideZones = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
             _lastAppWatchChecks = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+            _lastAppWatchStatusTexts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             _lastVisibleNetworks = new List<WifiNetwork>();
             _config = ConfigStore.Load();
             _scanTimer = new System.Windows.Forms.Timer();
@@ -1119,6 +1177,11 @@ namespace WinZoneTrigger
             _appWatchEnabledCheck.AutoSize = true;
             AddRowTo(_appWatchTable, "상태", _appWatchEnabledCheck);
 
+            _appWatchRequireWindowCheck = new CheckBox();
+            _appWatchRequireWindowCheck.Text = "표시 창이 없으면 다시 열기";
+            _appWatchRequireWindowCheck.AutoSize = true;
+            AddRowTo(_appWatchTable, "창 확인", _appWatchRequireWindowCheck);
+
             TableLayoutPanel appWatchTargetPanel = new TableLayoutPanel();
             appWatchTargetPanel.Dock = DockStyle.Fill;
             appWatchTargetPanel.AutoSize = true;
@@ -1299,6 +1362,7 @@ namespace WinZoneTrigger
                 {
                     return;
                 }
+                ClearSelectedAppWatchStatus();
                 CaptureCurrentZone();
                 CaptureGlobalSettings();
                 ResetAppWatchTimer();
@@ -1311,19 +1375,35 @@ namespace WinZoneTrigger
                 }
             };
 
+            _appWatchRequireWindowCheck.CheckedChanged += delegate
+            {
+                if (_loadingSelection)
+                {
+                    return;
+                }
+                ClearSelectedAppWatchStatus();
+                CaptureCurrentZone();
+                CaptureGlobalSettings();
+                RefreshSelectedAppWatchStatusLabel();
+            };
+
             _appWatchTargetText.Leave += delegate
             {
+                ClearSelectedAppWatchStatus();
                 FillAppWatchProcessNameFromTarget(false);
                 CaptureCurrentZone();
                 CaptureGlobalSettings();
+                RefreshSelectedAppWatchStatusLabel();
             };
 
             _appWatchProcessText.TextChanged += delegate
             {
                 if (!_loadingSelection)
                 {
+                    ClearSelectedAppWatchStatus();
                     CaptureCurrentZone();
                     CaptureGlobalSettings();
+                    RefreshSelectedAppWatchStatusLabel();
                 }
             };
 
@@ -1333,6 +1413,7 @@ namespace WinZoneTrigger
                 {
                     return;
                 }
+                ClearSelectedAppWatchStatus();
                 CaptureCurrentZone();
                 CaptureGlobalSettings();
                 ResetAppWatchTimer();
@@ -1345,6 +1426,7 @@ namespace WinZoneTrigger
                 {
                     return;
                 }
+                ClearSelectedAppWatchStatus();
                 CaptureCurrentZone();
                 CaptureGlobalSettings();
                 ResetAppWatchTimer();
@@ -2635,9 +2717,17 @@ namespace WinZoneTrigger
                 return;
             }
 
+            ClearSelectedAppWatchStatus();
             _appWatchTargetText.Text = (target ?? "").Trim();
             FillAppWatchProcessNameFromTarget(false);
+            if (_appWatchRequireWindowCheck != null
+                && ZoneRule.ShouldRequireWindowByDefault(_appWatchProcessText == null ? "" : _appWatchProcessText.Text, _appWatchTargetText.Text))
+            {
+                _appWatchRequireWindowCheck.Checked = true;
+            }
+            CaptureCurrentZone();
             CaptureGlobalSettings();
+            RefreshSelectedAppWatchStatusLabel();
         }
 
         private void FillAppWatchProcessNameFromTarget(bool replaceExisting)
@@ -2833,7 +2923,7 @@ namespace WinZoneTrigger
             }
 
             _appWatchInProgress = true;
-            UpdateAppWatchStatusLabel(reason + " 중입니다...");
+            UpdateAppWatchStatusLabel(reason + " 중입니다... (" + FormatAppWatchTimestamp(DateTime.Now) + ")");
 
             Task.Factory.StartNew(delegate
             {
@@ -2843,6 +2933,7 @@ namespace WinZoneTrigger
                     zone.Normalize();
                     string zoneProcessName = AppWatchdog.NormalizeProcessName(zone.AppWatchProcessName);
                     string zoneLaunchTarget = zone.AppWatchLaunchTarget ?? "";
+                    bool zoneRequireWindow = zone.AppWatchRequireWindow.GetValueOrDefault(false);
                     AppWatchZoneResult zoneResult = new AppWatchZoneResult
                     {
                         ZoneId = zone.Id,
@@ -2863,8 +2954,8 @@ namespace WinZoneTrigger
                         else
                         {
                             zoneResult.Result = launchIfMissing
-                                ? AppWatchdog.EnsureRunning(zoneProcessName, zoneLaunchTarget, SafeLog)
-                                : AppWatchdog.Check(zoneProcessName);
+                                ? AppWatchdog.EnsureRunning(zoneProcessName, zoneLaunchTarget, zoneRequireWindow, SafeLog)
+                                : AppWatchdog.Check(zoneProcessName, zoneRequireWindow);
                         }
                     }
                     catch (Exception ex)
@@ -2872,6 +2963,8 @@ namespace WinZoneTrigger
                         zoneResult.Error = ex.Message;
                     }
 
+                    zoneResult.CheckedAtLocal = DateTime.Now;
+                    zoneResult.NextCheckAtLocal = CalculateNextAppWatchCheckTime(zone, zoneResult.CheckedAtLocal);
                     results.Add(zoneResult);
                 }
 
@@ -2898,16 +2991,22 @@ namespace WinZoneTrigger
                     string summary = string.IsNullOrWhiteSpace(zoneResult.Error)
                         ? zoneResult.Result.Summary
                         : zoneResult.Error;
+                    string displaySummary = BuildAppWatchDisplayText(zoneResult, summary);
 
-                    AppendLog(reason + " 결과(" + zoneResult.ZoneName + "): " + summary);
+                    if (!string.IsNullOrWhiteSpace(zoneResult.ZoneId))
+                    {
+                        _lastAppWatchStatusTexts[zoneResult.ZoneId] = displaySummary;
+                    }
+
+                    AppendLog(reason + " 결과(" + zoneResult.ZoneName + "): " + displaySummary);
                     if (string.Equals(_currentZoneId, zoneResult.ZoneId, StringComparison.OrdinalIgnoreCase))
                     {
-                        UpdateAppWatchStatusLabel(summary);
+                        UpdateAppWatchStatusLabel(displaySummary);
                     }
 
                     if (zoneResult.Result != null && zoneResult.Result.LaunchAttempted)
                     {
-                        ShowTrayNotification("앱 감시 재실행", zoneResult.ZoneName + " · " + BuildLaunchNotificationText(zoneResult.LaunchTarget));
+                        ShowTrayNotification("앱 감시 재실행", BuildAppWatchNotificationText(zoneResult));
                     }
                 }
 
@@ -2916,11 +3015,159 @@ namespace WinZoneTrigger
                     AppWatchZoneResult firstResult = results.FirstOrDefault();
                     string message = firstResult == null
                         ? "앱 감시 결과가 없습니다."
-                        : string.IsNullOrWhiteSpace(firstResult.Error) ? firstResult.Result.Summary : firstResult.Error;
-                    bool ok = firstResult != null && firstResult.Result != null && firstResult.Result.IsRunning;
+                        : BuildAppWatchDisplayText(
+                            firstResult,
+                            string.IsNullOrWhiteSpace(firstResult.Error) ? firstResult.Result.Summary : firstResult.Error);
+                    bool ok = firstResult != null && firstResult.Result != null && firstResult.Result.MeetsRequirement;
                     MessageBox.Show(this, message, reason, MessageBoxButtons.OK, ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
                 }
             }, TaskScheduler.FromCurrentSynchronizationContext());
+        }
+
+        private string BuildCurrentAppWatchStatusText(ZoneRule zone)
+        {
+            if (zone == null)
+            {
+                return "아직 확인 전입니다.";
+            }
+
+            string status;
+            if (!string.IsNullOrWhiteSpace(zone.Id) && _lastAppWatchStatusTexts.TryGetValue(zone.Id, out status))
+            {
+                return status;
+            }
+
+            return BuildPendingAppWatchStatusText(zone);
+        }
+
+        private string BuildPendingAppWatchStatusText(ZoneRule zone)
+        {
+            if (zone == null)
+            {
+                return "아직 확인 전입니다.";
+            }
+
+            if (!zone.Enabled)
+            {
+                return "앱 감시 대기 · 위치 미운영";
+            }
+
+            if (!zone.AppWatchEnabled.GetValueOrDefault(false))
+            {
+                return "앱 감시 꺼짐";
+            }
+
+            DateTime? next = EstimateNextAppWatchCheckTime(zone);
+            return next.HasValue
+                ? "아직 확인 전입니다. · 다음 확인 " + FormatAppWatchTimestamp(next.Value)
+                : "아직 확인 전입니다.";
+        }
+
+        private DateTime? EstimateNextAppWatchCheckTime(ZoneRule zone)
+        {
+            if (zone == null || !zone.Enabled || !zone.AppWatchEnabled.GetValueOrDefault(false))
+            {
+                return null;
+            }
+
+            int interval = GetAppWatchIntervalMilliseconds(zone.AppWatchIntervalValue, zone.AppWatchIntervalUnit);
+            DateTime lastUtc;
+            if (!string.IsNullOrWhiteSpace(zone.Id) && _lastAppWatchChecks.TryGetValue(zone.Id, out lastUtc))
+            {
+                DateTime next = lastUtc.ToLocalTime().AddMilliseconds(interval);
+                return next < DateTime.Now ? DateTime.Now : next;
+            }
+
+            if (_appWatchTimerStartedAtLocal.HasValue && _appWatchTimer.Enabled)
+            {
+                DateTime next = _appWatchTimerStartedAtLocal.Value.AddMilliseconds(_appWatchTimer.Interval);
+                return next < DateTime.Now ? DateTime.Now : next;
+            }
+
+            return DateTime.Now.AddMilliseconds(interval);
+        }
+
+        private void RefreshSelectedAppWatchStatusLabel()
+        {
+            if (_loadingSelection || _appWatchStatusLabel == null)
+            {
+                return;
+            }
+
+            ZoneRule selected = GetSelectedZone();
+            if (selected == null)
+            {
+                UpdateAppWatchStatusLabel("아직 확인 전입니다.");
+                return;
+            }
+
+            UpdateAppWatchStatusLabel(BuildCurrentAppWatchStatusText(selected));
+        }
+
+        private void ClearSelectedAppWatchStatus()
+        {
+            if (string.IsNullOrWhiteSpace(_currentZoneId))
+            {
+                return;
+            }
+
+            _lastAppWatchStatusTexts.Remove(_currentZoneId);
+        }
+
+        private static DateTime? CalculateNextAppWatchCheckTime(ZoneRule zone, DateTime checkedAtLocal)
+        {
+            if (zone == null || !zone.Enabled || !zone.AppWatchEnabled.GetValueOrDefault(false))
+            {
+                return null;
+            }
+
+            int interval = GetAppWatchIntervalMilliseconds(zone.AppWatchIntervalValue, zone.AppWatchIntervalUnit);
+            return checkedAtLocal.AddMilliseconds(interval);
+        }
+
+        private static string BuildAppWatchDisplayText(AppWatchZoneResult zoneResult, string summary)
+        {
+            string timing = BuildAppWatchTimingText(zoneResult, true);
+            if (string.IsNullOrWhiteSpace(timing))
+            {
+                return summary ?? "";
+            }
+
+            return timing + " · " + (summary ?? "");
+        }
+
+        private static string BuildAppWatchNotificationText(AppWatchZoneResult zoneResult)
+        {
+            if (zoneResult == null)
+            {
+                return "앱 감시 재실행";
+            }
+
+            string timing = BuildAppWatchTimingText(zoneResult, false);
+            string target = BuildLaunchNotificationText(zoneResult.LaunchTarget);
+            string message = zoneResult.ZoneName + " · " + target;
+            return string.IsNullOrWhiteSpace(timing) ? message : timing + " · " + message;
+        }
+
+        private static string BuildAppWatchTimingText(AppWatchZoneResult zoneResult, bool includeNext)
+        {
+            if (zoneResult == null || zoneResult.CheckedAtLocal == default(DateTime))
+            {
+                return "";
+            }
+
+            string text = "확인 " + FormatAppWatchTimestamp(zoneResult.CheckedAtLocal);
+            if (includeNext && zoneResult.NextCheckAtLocal.HasValue)
+            {
+                text += " · 다음 확인 " + FormatAppWatchTimestamp(zoneResult.NextCheckAtLocal.Value);
+            }
+
+            return text;
+        }
+
+        private static string FormatAppWatchTimestamp(DateTime value)
+        {
+            return value.ToString("yyyy-MM-dd HH:mm:ss");
         }
 
         private void UpdateAppWatchStatusLabel(string text)
@@ -3489,6 +3736,7 @@ namespace WinZoneTrigger
                 SetChromeUrls(new List<string>());
                 SetAppLaunches(new List<string>());
                 _appWatchEnabledCheck.Checked = false;
+                _appWatchRequireWindowCheck.Checked = false;
                 _appWatchTargetText.Text = "";
                 _appWatchProcessText.Text = "";
                 SetAppWatchIntervalUnitSelection("Minutes");
@@ -3520,11 +3768,12 @@ namespace WinZoneTrigger
                 SetChromeUrls(zone.ChromeUrls);
                 SetAppLaunches(zone.AppLaunches);
                 _appWatchEnabledCheck.Checked = zone.AppWatchEnabled.GetValueOrDefault(false);
+                _appWatchRequireWindowCheck.Checked = zone.AppWatchRequireWindow.GetValueOrDefault(false);
                 _appWatchTargetText.Text = zone.AppWatchLaunchTarget ?? "";
                 _appWatchProcessText.Text = zone.AppWatchProcessName ?? "";
                 SetAppWatchIntervalUnitSelection(zone.AppWatchIntervalUnit);
                 _appWatchIntervalInput.Value = Math.Max(_appWatchIntervalInput.Minimum, Math.Min(_appWatchIntervalInput.Maximum, zone.AppWatchIntervalValue));
-                UpdateAppWatchStatusLabel("아직 확인 전입니다.");
+                UpdateAppWatchStatusLabel(BuildCurrentAppWatchStatusText(zone));
                 _commandsText.Text = JoinLines(zone.Commands);
             }
 
@@ -3568,6 +3817,7 @@ namespace WinZoneTrigger
             zone.ChromeUrls = GetChromeUrls();
             zone.AppLaunches = GetAppLaunches();
             zone.AppWatchEnabled = _appWatchEnabledCheck.Checked;
+            zone.AppWatchRequireWindow = _appWatchRequireWindowCheck.Checked;
             zone.AppWatchLaunchTarget = _appWatchTargetText.Text.Trim();
             zone.AppWatchProcessName = _appWatchProcessText.Text.Trim();
             zone.AppWatchIntervalValue = Convert.ToInt32(_appWatchIntervalInput.Value);
@@ -3591,6 +3841,7 @@ namespace WinZoneTrigger
             ZoneRule firstAppWatchZone = _config.Zones.FirstOrDefault(z => z.Enabled && z.AppWatchEnabled.GetValueOrDefault(false));
             _config.AppWatchLaunchTarget = firstAppWatchZone == null ? "" : firstAppWatchZone.AppWatchLaunchTarget;
             _config.AppWatchProcessName = firstAppWatchZone == null ? "" : firstAppWatchZone.AppWatchProcessName;
+            _config.AppWatchRequireWindow = firstAppWatchZone == null ? false : firstAppWatchZone.AppWatchRequireWindow;
             _config.AppWatchIntervalValue = firstAppWatchZone == null ? 5 : firstAppWatchZone.AppWatchIntervalValue;
             _config.AppWatchIntervalUnit = firstAppWatchZone == null ? "Minutes" : firstAppWatchZone.AppWatchIntervalUnit;
         }
@@ -4000,11 +4251,14 @@ namespace WinZoneTrigger
         private void ResetAppWatchTimer()
         {
             _appWatchTimer.Stop();
+            _appWatchTimerStartedAtLocal = null;
             if (HasAppWatchZones())
             {
                 _appWatchTimer.Interval = GetShortestAppWatchIntervalMilliseconds();
+                _appWatchTimerStartedAtLocal = DateTime.Now;
                 _appWatchTimer.Start();
             }
+            RefreshSelectedAppWatchStatusLabel();
         }
 
         private void ScanTimerTick(object sender, EventArgs e)
@@ -5302,8 +5556,14 @@ $culture = [Globalization.CultureInfo]::InvariantCulture
     {
         public string ProcessName { get; set; }
         public int ProcessCount { get; set; }
+        public int MainWindowCount { get; set; }
+        public int VisibleWindowCount { get; set; }
         public bool IsRunning { get; set; }
+        public bool RequiresVisibleWindow { get; set; }
+        public bool HasVisibleWindow { get; set; }
+        public bool MeetsRequirement { get; set; }
         public bool LaunchAttempted { get; set; }
+        public IntPtr WindowHandle { get; set; }
         public string Summary { get; set; }
     }
 
@@ -5312,12 +5572,37 @@ $culture = [Globalization.CultureInfo]::InvariantCulture
         public string ZoneId { get; set; }
         public string ZoneName { get; set; }
         public string LaunchTarget { get; set; }
+        public DateTime CheckedAtLocal { get; set; }
+        public DateTime? NextCheckAtLocal { get; set; }
         public AppWatchCheckResult Result { get; set; }
         public string Error { get; set; }
     }
 
     internal static class AppWatchdog
     {
+        private const int SW_RESTORE = 9;
+        private const int SW_SHOW = 5;
+
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProcessId);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsIconic(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
         public static string InferProcessName(string target)
         {
             return NormalizeProcessName(target);
@@ -5406,7 +5691,75 @@ $culture = [Globalization.CultureInfo]::InvariantCulture
             return appId.Trim();
         }
 
+        private static WindowScanResult FindTopLevelWindows(Process[] processes)
+        {
+            WindowScanResult result = new WindowScanResult();
+            if (processes == null || processes.Length == 0)
+            {
+                return result;
+            }
+
+            HashSet<int> processIds = new HashSet<int>();
+            foreach (Process process in processes)
+            {
+                try
+                {
+                    processIds.Add(process.Id);
+                }
+                catch
+                {
+                }
+            }
+
+            if (processIds.Count == 0)
+            {
+                return result;
+            }
+
+            EnumWindows(delegate(IntPtr windowHandle, IntPtr lParam)
+            {
+                int windowProcessId;
+                GetWindowThreadProcessId(windowHandle, out windowProcessId);
+                if (!processIds.Contains(windowProcessId))
+                {
+                    return true;
+                }
+
+                result.WindowCount++;
+                if (result.WindowHandle == IntPtr.Zero)
+                {
+                    result.WindowHandle = windowHandle;
+                }
+
+                if (IsWindowVisible(windowHandle))
+                {
+                    result.VisibleWindowCount++;
+                    if (result.VisibleWindowHandle == IntPtr.Zero)
+                    {
+                        result.VisibleWindowHandle = windowHandle;
+                    }
+                }
+
+                return true;
+            }, IntPtr.Zero);
+
+            return result;
+        }
+
+        private sealed class WindowScanResult
+        {
+            public int WindowCount { get; set; }
+            public int VisibleWindowCount { get; set; }
+            public IntPtr WindowHandle { get; set; }
+            public IntPtr VisibleWindowHandle { get; set; }
+        }
+
         public static AppWatchCheckResult Check(string processName)
+        {
+            return Check(processName, false);
+        }
+
+        public static AppWatchCheckResult Check(string processName, bool requireVisibleWindow)
         {
             string normalized = NormalizeProcessName(processName);
             if (string.IsNullOrWhiteSpace(normalized))
@@ -5418,17 +5771,25 @@ $culture = [Globalization.CultureInfo]::InvariantCulture
             try
             {
                 int count = processes == null ? 0 : processes.Length;
+                WindowScanResult windowScan = FindTopLevelWindows(processes);
+
                 bool isRunning = count > 0;
-                return new AppWatchCheckResult
+                bool hasVisibleWindow = windowScan.VisibleWindowCount > 0;
+                AppWatchCheckResult result = new AppWatchCheckResult
                 {
                     ProcessName = normalized,
                     ProcessCount = count,
+                    MainWindowCount = windowScan.WindowCount,
+                    VisibleWindowCount = windowScan.VisibleWindowCount,
                     IsRunning = isRunning,
+                    RequiresVisibleWindow = requireVisibleWindow,
+                    HasVisibleWindow = hasVisibleWindow,
+                    MeetsRequirement = isRunning && (!requireVisibleWindow || hasVisibleWindow),
                     LaunchAttempted = false,
-                    Summary = isRunning
-                        ? "실행 중: " + normalized + " (" + count + "개)"
-                        : "실행 중 아님: " + normalized
+                    WindowHandle = windowScan.VisibleWindowHandle == IntPtr.Zero ? windowScan.WindowHandle : windowScan.VisibleWindowHandle
                 };
+                result.Summary = BuildCheckSummary(result);
+                return result;
             }
             finally
             {
@@ -5442,10 +5803,10 @@ $culture = [Globalization.CultureInfo]::InvariantCulture
             }
         }
 
-        public static AppWatchCheckResult EnsureRunning(string processName, string launchTarget, Action<string> log)
+        public static AppWatchCheckResult EnsureRunning(string processName, string launchTarget, bool requireVisibleWindow, Action<string> log)
         {
-            AppWatchCheckResult current = Check(processName);
-            if (current.IsRunning)
+            AppWatchCheckResult current = Check(processName, requireVisibleWindow);
+            if (current.MeetsRequirement)
             {
                 return current;
             }
@@ -5458,18 +5819,98 @@ $culture = [Globalization.CultureInfo]::InvariantCulture
 
             if (log != null)
             {
-                log("앱 감시: 꺼진 상태라 다시 실행합니다: " + current.ProcessName);
+                if (current.IsRunning && requireVisibleWindow)
+                {
+                    log("앱 감시: 프로세스는 있지만 표시 창이 없어 다시 열기를 요청합니다: " + current.ProcessName);
+                }
+                else
+                {
+                    log("앱 감시: 꺼진 상태라 다시 실행합니다: " + current.ProcessName);
+                }
             }
 
             AppLauncher.LaunchApp(target, log ?? delegate { });
-            Thread.Sleep(2000);
+            AppWatchCheckResult afterLaunch = WaitForRequirement(processName, requireVisibleWindow);
 
-            AppWatchCheckResult afterLaunch = Check(processName);
             afterLaunch.LaunchAttempted = true;
-            afterLaunch.Summary = afterLaunch.IsRunning
-                ? "다시 실행됨: " + afterLaunch.ProcessName + " (" + afterLaunch.ProcessCount + "개)"
-                : "실행 요청 완료, 아직 프로세스 미확인: " + afterLaunch.ProcessName;
+            if (requireVisibleWindow && afterLaunch.HasVisibleWindow)
+            {
+                TryBringWindowToFront(afterLaunch.WindowHandle);
+            }
+
+            afterLaunch.Summary = BuildLaunchSummary(afterLaunch);
             return afterLaunch;
+        }
+
+        private static AppWatchCheckResult WaitForRequirement(string processName, bool requireVisibleWindow)
+        {
+            DateTime deadline = DateTime.UtcNow.AddMilliseconds(requireVisibleWindow ? 8000 : 2000);
+            AppWatchCheckResult latest = Check(processName, requireVisibleWindow);
+            while (!latest.MeetsRequirement && DateTime.UtcNow < deadline)
+            {
+                Thread.Sleep(500);
+                latest = Check(processName, requireVisibleWindow);
+            }
+
+            return latest;
+        }
+
+        private static string BuildCheckSummary(AppWatchCheckResult result)
+        {
+            if (result == null || !result.IsRunning)
+            {
+                return "실행 중 아님: " + (result == null ? "" : result.ProcessName);
+            }
+
+            string windowSummary = result.VisibleWindowCount > 0
+                ? ", 표시 창 " + result.VisibleWindowCount + "개"
+                : result.MainWindowCount > 0 ? ", 숨겨진 창 " + result.MainWindowCount + "개" : ", 창 없음";
+
+            if (result.RequiresVisibleWindow && !result.HasVisibleWindow)
+            {
+                return "실행 중이지만 표시 창 없음: " + result.ProcessName + " (" + result.ProcessCount + "개" + windowSummary + ")";
+            }
+
+            return "실행 중: " + result.ProcessName + " (" + result.ProcessCount + "개" + windowSummary + ")";
+        }
+
+        private static string BuildLaunchSummary(AppWatchCheckResult result)
+        {
+            if (result == null)
+            {
+                return "실행 요청 완료, 아직 프로세스 미확인";
+            }
+
+            if (result.MeetsRequirement)
+            {
+                return result.RequiresVisibleWindow
+                    ? "다시 열림: " + result.ProcessName + " (" + result.ProcessCount + "개, 표시 창 " + result.VisibleWindowCount + "개)"
+                    : "다시 실행됨: " + result.ProcessName + " (" + result.ProcessCount + "개)";
+            }
+
+            if (result.IsRunning && result.RequiresVisibleWindow)
+            {
+                return "실행 요청 완료, 표시 창 아직 없음: " + result.ProcessName + " (" + result.ProcessCount + "개)";
+            }
+
+            return "실행 요청 완료, 아직 프로세스 미확인: " + result.ProcessName;
+        }
+
+        private static void TryBringWindowToFront(IntPtr windowHandle)
+        {
+            if (windowHandle == IntPtr.Zero)
+            {
+                return;
+            }
+
+            try
+            {
+                ShowWindow(windowHandle, IsIconic(windowHandle) ? SW_RESTORE : SW_SHOW);
+                SetForegroundWindow(windowHandle);
+            }
+            catch
+            {
+            }
         }
     }
 
@@ -5525,6 +5966,19 @@ $culture = [Globalization.CultureInfo]::InvariantCulture
             string value = (target ?? "").Trim();
             if (value.Length == 0)
             {
+                return;
+            }
+
+            if (IsNotepadTarget(value))
+            {
+                if (TryLaunchNotepad())
+                {
+                    log("앱 실행 성공: 메모장");
+                }
+                else
+                {
+                    log("앱 실행 실패: 메모장을 찾지 못했습니다.");
+                }
                 return;
             }
 
@@ -5597,6 +6051,12 @@ $culture = [Globalization.CultureInfo]::InvariantCulture
                 {
                     log("앱 실행 실패: 앱을 찾았지만 실행하지 못했습니다: " + value);
                 }
+                return;
+            }
+
+            if (LooksLikeExecutableCommand(value) && TryStartShellTarget(value))
+            {
+                log("앱 실행 성공: " + value);
                 return;
             }
 
@@ -5877,6 +6337,53 @@ Start-Process explorer.exe -ArgumentList ('shell:AppsFolder\' + $app.AppID)
                     @"Microsoft\Windows\Start Menu\Programs\Microsoft Teams.lnk"));
         }
 
+        private static bool TryLaunchNotepad()
+        {
+            return TryStartAppsFolderTarget(@"shell:AppsFolder\Microsoft.WindowsNotepad_8wekyb3d8bbwe!App")
+                || TryLaunchStartMenuApp("메모장")
+                || TryLaunchStartMenuApp("Notepad")
+                || TryStartShellTarget(Path.Combine(Environment.SystemDirectory, "notepad.exe"));
+        }
+
+        private static bool IsNotepadTarget(string target)
+        {
+            string value = (target ?? "").Trim().Trim('"');
+            if (value.Length == 0)
+            {
+                return false;
+            }
+
+            string name = value;
+            try
+            {
+                string fileName = Path.GetFileName(value);
+                if (!string.IsNullOrWhiteSpace(fileName))
+                {
+                    name = fileName;
+                }
+            }
+            catch
+            {
+            }
+
+            string withoutExtension = name;
+            try
+            {
+                string extension = Path.GetExtension(name);
+                if (!string.IsNullOrWhiteSpace(extension))
+                {
+                    withoutExtension = Path.GetFileNameWithoutExtension(name);
+                }
+            }
+            catch
+            {
+            }
+
+            return string.Equals(name, "notepad.exe", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(withoutExtension, "notepad", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(withoutExtension, "메모장", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static bool TryLaunchCommonPath(string path)
         {
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
@@ -5999,6 +6506,33 @@ Start-Process explorer.exe -ArgumentList ('shell:AppsFolder\' + $app.AppID)
             return target.IndexOf("://", StringComparison.Ordinal) > 0
                 || target.StartsWith("shell:", StringComparison.OrdinalIgnoreCase)
                 || target.StartsWith("ms-", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool LooksLikeExecutableCommand(string target)
+        {
+            string value = (target ?? "").Trim().Trim('"');
+            if (value.Length == 0)
+            {
+                return false;
+            }
+
+            if (value.IndexOf(Path.DirectorySeparatorChar) >= 0 || value.IndexOf(Path.AltDirectorySeparatorChar) >= 0)
+            {
+                return false;
+            }
+
+            string extension = "";
+            try
+            {
+                extension = Path.GetExtension(value);
+            }
+            catch
+            {
+            }
+
+            return string.Equals(extension, ".exe", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(extension, ".bat", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(extension, ".cmd", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsShortcutPath(string target)
