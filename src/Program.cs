@@ -130,16 +130,102 @@ namespace WinZoneTrigger
             if (AppWatchEnabled
                 && Zones.Count > 0
                 && !string.IsNullOrWhiteSpace(AppWatchLaunchTarget)
-                && !Zones.Any(z => z.AppWatchEnabled.GetValueOrDefault(false)))
+                && !Zones.Any(z => z.HasAppWatchItems()))
             {
                 ZoneRule firstZone = Zones.FirstOrDefault(z => z.Enabled) ?? Zones[0];
-                firstZone.AppWatchEnabled = true;
-                firstZone.AppWatchRequireWindow = AppWatchRequireWindow;
-                firstZone.AppWatchLaunchTarget = AppWatchLaunchTarget;
-                firstZone.AppWatchProcessName = AppWatchProcessName;
-                firstZone.AppWatchIntervalValue = AppWatchIntervalValue;
-                firstZone.AppWatchIntervalUnit = AppWatchIntervalUnit;
+                if (firstZone.AppWatchItems == null)
+                {
+                    firstZone.AppWatchItems = new List<AppWatchItem>();
+                }
+
+                firstZone.AppWatchItems.Add(new AppWatchItem
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Enabled = true,
+                    RequireWindow = AppWatchRequireWindow,
+                    LaunchTarget = AppWatchLaunchTarget,
+                    ProcessName = AppWatchProcessName,
+                    IntervalValue = AppWatchIntervalValue,
+                    IntervalUnit = AppWatchIntervalUnit
+                });
                 firstZone.Normalize();
+            }
+        }
+    }
+
+    public sealed class AppWatchItem
+    {
+        public string Id { get; set; }
+        public bool Enabled { get; set; }
+        public bool? RequireWindow { get; set; }
+        public string ProcessName { get; set; }
+        public string LaunchTarget { get; set; }
+        public int IntervalValue { get; set; }
+        public string IntervalUnit { get; set; }
+
+        public static AppWatchItem CreateDefault()
+        {
+            return new AppWatchItem
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Enabled = true,
+                RequireWindow = false,
+                ProcessName = "",
+                LaunchTarget = "",
+                IntervalValue = 5,
+                IntervalUnit = "Minutes"
+            };
+        }
+
+        public AppWatchItem Clone()
+        {
+            return new AppWatchItem
+            {
+                Id = Id,
+                Enabled = Enabled,
+                RequireWindow = RequireWindow,
+                ProcessName = ProcessName,
+                LaunchTarget = LaunchTarget,
+                IntervalValue = IntervalValue,
+                IntervalUnit = IntervalUnit
+            };
+        }
+
+        public void Normalize()
+        {
+            if (string.IsNullOrWhiteSpace(Id))
+            {
+                Id = Guid.NewGuid().ToString("N");
+            }
+
+            if (ProcessName == null)
+            {
+                ProcessName = "";
+            }
+
+            if (LaunchTarget == null)
+            {
+                LaunchTarget = "";
+            }
+
+            if (!RequireWindow.HasValue)
+            {
+                RequireWindow = ZoneRule.ShouldRequireWindowByDefault(ProcessName, LaunchTarget);
+            }
+
+            if (!string.Equals(IntervalUnit, "Hours", StringComparison.OrdinalIgnoreCase))
+            {
+                IntervalUnit = "Minutes";
+            }
+
+            int maxInterval = string.Equals(IntervalUnit, "Hours", StringComparison.OrdinalIgnoreCase) ? 168 : 10080;
+            if (IntervalValue <= 0)
+            {
+                IntervalValue = 5;
+            }
+            else if (IntervalValue > maxInterval)
+            {
+                IntervalValue = maxInterval;
             }
         }
     }
@@ -158,6 +244,7 @@ namespace WinZoneTrigger
         public string AppWatchLaunchTarget { get; set; }
         public int AppWatchIntervalValue { get; set; }
         public string AppWatchIntervalUnit { get; set; }
+        public List<AppWatchItem> AppWatchItems { get; set; }
         public bool UseCoordinates { get; set; }
         public double Latitude { get; set; }
         public double Longitude { get; set; }
@@ -188,6 +275,7 @@ namespace WinZoneTrigger
                 AppWatchLaunchTarget = "",
                 AppWatchIntervalValue = 5,
                 AppWatchIntervalUnit = "Minutes",
+                AppWatchItems = new List<AppWatchItem>(),
                 UseCoordinates = false,
                 Latitude = 0,
                 Longitude = 0,
@@ -220,6 +308,7 @@ namespace WinZoneTrigger
                 AppWatchLaunchTarget = AppWatchLaunchTarget,
                 AppWatchIntervalValue = AppWatchIntervalValue,
                 AppWatchIntervalUnit = AppWatchIntervalUnit,
+                AppWatchItems = AppWatchItems == null ? new List<AppWatchItem>() : AppWatchItems.Select(item => item == null ? null : item.Clone()).Where(item => item != null).ToList(),
                 UseCoordinates = UseCoordinates,
                 Latitude = Latitude,
                 Longitude = Longitude,
@@ -311,6 +400,40 @@ namespace WinZoneTrigger
                 AppWatchIntervalValue = maxAppWatchInterval;
             }
 
+            bool hasLegacyAppWatch = AppWatchEnabled.GetValueOrDefault(false)
+                || !string.IsNullOrWhiteSpace(AppWatchLaunchTarget)
+                || !string.IsNullOrWhiteSpace(AppWatchProcessName);
+
+            if (AppWatchItems == null)
+            {
+                AppWatchItems = new List<AppWatchItem>();
+            }
+
+            if (AppWatchItems.Count == 0 && hasLegacyAppWatch)
+            {
+                AppWatchItems.Add(new AppWatchItem
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Enabled = AppWatchEnabled.GetValueOrDefault(false),
+                    RequireWindow = AppWatchRequireWindow,
+                    ProcessName = AppWatchProcessName,
+                    LaunchTarget = AppWatchLaunchTarget,
+                    IntervalValue = AppWatchIntervalValue,
+                    IntervalUnit = AppWatchIntervalUnit
+                });
+            }
+
+            AppWatchItems = AppWatchItems
+                .Where(item => item != null)
+                .ToList();
+
+            foreach (AppWatchItem item in AppWatchItems)
+            {
+                item.Normalize();
+            }
+
+            SyncLegacyAppWatchFields();
+
             if (NearbySsids == null)
             {
                 NearbySsids = new List<string>();
@@ -366,6 +489,45 @@ namespace WinZoneTrigger
             {
                 AudioAction = "None";
             }
+        }
+
+        public bool HasAppWatchItems()
+        {
+            return AppWatchItems != null && AppWatchItems.Any(item => item != null);
+        }
+
+        public IEnumerable<AppWatchItem> GetEnabledAppWatchItems()
+        {
+            return (AppWatchItems ?? new List<AppWatchItem>())
+                .Where(item => item != null && item.Enabled);
+        }
+
+        public void SyncLegacyAppWatchFields()
+        {
+            if (AppWatchItems == null)
+            {
+                AppWatchItems = new List<AppWatchItem>();
+            }
+
+            AppWatchItem first = AppWatchItems.FirstOrDefault(item => item != null && item.Enabled)
+                ?? AppWatchItems.FirstOrDefault(item => item != null);
+
+            AppWatchEnabled = AppWatchItems.Any(item => item != null && item.Enabled);
+            if (first == null)
+            {
+                AppWatchRequireWindow = false;
+                AppWatchProcessName = "";
+                AppWatchLaunchTarget = "";
+                AppWatchIntervalValue = 5;
+                AppWatchIntervalUnit = "Minutes";
+                return;
+            }
+
+            AppWatchRequireWindow = first.RequireWindow.GetValueOrDefault(false);
+            AppWatchProcessName = first.ProcessName ?? "";
+            AppWatchLaunchTarget = first.LaunchTarget ?? "";
+            AppWatchIntervalValue = first.IntervalValue <= 0 ? 5 : first.IntervalValue;
+            AppWatchIntervalUnit = string.Equals(first.IntervalUnit, "Hours", StringComparison.OrdinalIgnoreCase) ? "Hours" : "Minutes";
         }
 
         public static bool ShouldRequireWindowByDefault(string processName, string launchTarget)
@@ -594,6 +756,8 @@ namespace WinZoneTrigger
         private FlowLayoutPanel _appSearchResultsPanel;
         private FlowLayoutPanel _appLaunchChipsPanel;
         private string _selectedAppLaunch;
+        private FlowLayoutPanel _appWatchItemsPanel;
+        private string _selectedAppWatchItemId;
         private CheckBox _appWatchEnabledCheck;
         private CheckBox _appWatchRequireWindowCheck;
         private TextBox _appWatchTargetText;
@@ -1172,15 +1336,76 @@ namespace WinZoneTrigger
 
             AddSectionHeaderTo(_appWatchTable, "앱 감시");
 
+            TableLayoutPanel appWatchListPanel = new TableLayoutPanel();
+            appWatchListPanel.Dock = DockStyle.Fill;
+            appWatchListPanel.AutoSize = true;
+            appWatchListPanel.ColumnCount = 1;
+            appWatchListPanel.RowCount = 2;
+            appWatchListPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            appWatchListPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            _appWatchItemsPanel = CreateChipPanel(150);
+            appWatchListPanel.Controls.Add(_appWatchItemsPanel, 0, 0);
+
+            FlowLayoutPanel appWatchListButtons = new FlowLayoutPanel();
+            appWatchListButtons.Dock = DockStyle.Fill;
+            appWatchListButtons.AutoSize = true;
+            appWatchListButtons.WrapContents = true;
+            appWatchListButtons.Margin = new Padding(0);
+
+            Button addAppWatchButton = CreateButton("새 감시");
+            SetFixedButtonSize(addAppWatchButton, 78, 30);
+            addAppWatchButton.Click += delegate { AddNewAppWatchItem(); };
+            appWatchListButtons.Controls.Add(addAppWatchButton);
+
+            Button findAppWatchButton = CreateButton("앱 찾기");
+            SetFixedButtonSize(findAppWatchButton, 78, 30);
+            findAppWatchButton.Click += delegate { ShowAppWatchPicker(); };
+            appWatchListButtons.Controls.Add(findAppWatchButton);
+
+            Button browseAppWatchButton = CreateButton("파일 선택");
+            SetFixedButtonSize(browseAppWatchButton, 86, 30);
+            browseAppWatchButton.Click += delegate { BrowseAppWatchFile(); };
+            appWatchListButtons.Controls.Add(browseAppWatchButton);
+
+            Button removeAppWatchButton = CreateButton("선택 삭제");
+            SetFixedButtonSize(removeAppWatchButton, 88, 30);
+            removeAppWatchButton.Click += delegate { RemoveSelectedAppWatchItem(); };
+            appWatchListButtons.Controls.Add(removeAppWatchButton);
+
+            appWatchListPanel.Controls.Add(appWatchListButtons, 0, 1);
+            AddRowTo(_appWatchTable, "등록 목록", appWatchListPanel);
+
+            FlowLayoutPanel appWatchStatePanel = new FlowLayoutPanel();
+            appWatchStatePanel.Dock = DockStyle.Fill;
+            appWatchStatePanel.AutoSize = true;
+            appWatchStatePanel.WrapContents = true;
+            appWatchStatePanel.Margin = new Padding(0);
+
             _appWatchEnabledCheck = new CheckBox();
-            _appWatchEnabledCheck.Text = "프로그램이 꺼져 있으면 다시 실행";
-            _appWatchEnabledCheck.AutoSize = true;
-            AddRowTo(_appWatchTable, "상태", _appWatchEnabledCheck);
+            _appWatchEnabledCheck.Appearance = Appearance.Button;
+            _appWatchEnabledCheck.AutoSize = false;
+            _appWatchEnabledCheck.Size = new Size(64, 30);
+            _appWatchEnabledCheck.Margin = new Padding(4);
+            StyleSwitchToggle(_appWatchEnabledCheck, "ON", "OFF");
+            appWatchStatePanel.Controls.Add(_appWatchEnabledCheck);
 
             _appWatchRequireWindowCheck = new CheckBox();
-            _appWatchRequireWindowCheck.Text = "표시 창이 없으면 다시 열기";
-            _appWatchRequireWindowCheck.AutoSize = true;
-            AddRowTo(_appWatchTable, "창 확인", _appWatchRequireWindowCheck);
+            _appWatchRequireWindowCheck.Appearance = Appearance.Button;
+            _appWatchRequireWindowCheck.AutoSize = false;
+            _appWatchRequireWindowCheck.Size = new Size(92, 30);
+            _appWatchRequireWindowCheck.Margin = new Padding(4);
+            StyleSwitchToggle(_appWatchRequireWindowCheck, "창 ON", "창 OFF");
+            appWatchStatePanel.Controls.Add(_appWatchRequireWindowCheck);
+
+            Label appWatchStateHint = new Label();
+            appWatchStateHint.AutoSize = true;
+            appWatchStateHint.Text = "ON이면 프로세스가 꺼졌을 때 다시 실행합니다. 창 ON은 표시 창이 없을 때도 다시 엽니다.";
+            appWatchStateHint.ForeColor = UiTextMuted;
+            appWatchStateHint.Tag = "Muted";
+            appWatchStateHint.Margin = new Padding(8, 9, 0, 4);
+            appWatchStatePanel.Controls.Add(appWatchStateHint);
+            AddRowTo(_appWatchTable, "선택 항목", appWatchStatePanel);
 
             TableLayoutPanel appWatchTargetPanel = new TableLayoutPanel();
             appWatchTargetPanel.Dock = DockStyle.Fill;
@@ -1200,15 +1425,15 @@ namespace WinZoneTrigger
             _appWatchTargetText.Width = 330;
             appWatchTargetInputPanel.Controls.Add(_appWatchTargetText);
 
-            Button findAppWatchButton = CreateButton("앱 찾기");
-            SetFixedButtonSize(findAppWatchButton, 78, 30);
-            findAppWatchButton.Click += delegate { ShowAppWatchPicker(); };
-            appWatchTargetInputPanel.Controls.Add(findAppWatchButton);
+            Button findAppWatchTargetButton = CreateButton("앱 찾기");
+            SetFixedButtonSize(findAppWatchTargetButton, 78, 30);
+            findAppWatchTargetButton.Click += delegate { ShowAppWatchPicker(); };
+            appWatchTargetInputPanel.Controls.Add(findAppWatchTargetButton);
 
-            Button browseAppWatchButton = CreateButton("파일 선택");
-            SetFixedButtonSize(browseAppWatchButton, 86, 30);
-            browseAppWatchButton.Click += delegate { BrowseAppWatchFile(); };
-            appWatchTargetInputPanel.Controls.Add(browseAppWatchButton);
+            Button browseAppWatchTargetButton = CreateButton("파일 선택");
+            SetFixedButtonSize(browseAppWatchTargetButton, 86, 30);
+            browseAppWatchTargetButton.Click += delegate { BrowseAppWatchFile(); };
+            appWatchTargetInputPanel.Controls.Add(browseAppWatchTargetButton);
 
             Button testAppWatchLaunchButton = CreateButton("실행 테스트");
             SetFixedButtonSize(testAppWatchLaunchButton, 92, 30);
@@ -1362,16 +1587,19 @@ namespace WinZoneTrigger
                 {
                     return;
                 }
+                StyleSwitchToggle(_appWatchEnabledCheck, "ON", "OFF");
                 ClearSelectedAppWatchStatus();
                 CaptureCurrentZone();
                 CaptureGlobalSettings();
                 ResetAppWatchTimer();
                 ZoneRule selected = GetSelectedZone();
-                string name = selected == null ? "선택 위치" : selected.Name;
+                AppWatchItem item = GetSelectedAppWatchItem(selected);
+                string name = BuildAppWatchLogName(selected, item);
                 AppendLog(_appWatchEnabledCheck.Checked ? "앱 감시를 시작했습니다: " + name : "앱 감시를 껐습니다: " + name);
+                RenderAppWatchItems();
                 if (_appWatchEnabledCheck.Checked)
                 {
-                    RunAppWatchCheck(selected == null ? null : selected.Clone(), true, "앱 감시 시작 확인", false);
+                    RunAppWatchCheck(selected == null ? null : selected.Clone(), item == null ? null : item.Clone(), true, "앱 감시 시작 확인", false);
                 }
             };
 
@@ -1381,9 +1609,11 @@ namespace WinZoneTrigger
                 {
                     return;
                 }
+                StyleSwitchToggle(_appWatchRequireWindowCheck, "창 ON", "창 OFF");
                 ClearSelectedAppWatchStatus();
                 CaptureCurrentZone();
                 CaptureGlobalSettings();
+                RenderAppWatchItems();
                 RefreshSelectedAppWatchStatusLabel();
             };
 
@@ -1393,6 +1623,7 @@ namespace WinZoneTrigger
                 FillAppWatchProcessNameFromTarget(false);
                 CaptureCurrentZone();
                 CaptureGlobalSettings();
+                RenderAppWatchItems();
                 RefreshSelectedAppWatchStatusLabel();
             };
 
@@ -1403,6 +1634,7 @@ namespace WinZoneTrigger
                     ClearSelectedAppWatchStatus();
                     CaptureCurrentZone();
                     CaptureGlobalSettings();
+                    RenderAppWatchItems();
                     RefreshSelectedAppWatchStatusLabel();
                 }
             };
@@ -1416,6 +1648,7 @@ namespace WinZoneTrigger
                 ClearSelectedAppWatchStatus();
                 CaptureCurrentZone();
                 CaptureGlobalSettings();
+                RenderAppWatchItems();
                 ResetAppWatchTimer();
             };
 
@@ -1429,6 +1662,7 @@ namespace WinZoneTrigger
                 ClearSelectedAppWatchStatus();
                 CaptureCurrentZone();
                 CaptureGlobalSettings();
+                RenderAppWatchItems();
                 ResetAppWatchTimer();
             };
         }
@@ -1666,6 +1900,11 @@ namespace WinZoneTrigger
             if (zone.AppLaunches != null && zone.AppLaunches.Any(a => !string.IsNullOrWhiteSpace(a)))
             {
                 actions.Add("앱 " + zone.AppLaunches.Count(a => !string.IsNullOrWhiteSpace(a)) + "개");
+            }
+            int appWatchCount = zone.AppWatchItems == null ? 0 : zone.AppWatchItems.Count(item => item != null && item.Enabled);
+            if (appWatchCount > 0)
+            {
+                actions.Add("앱 감시 " + appWatchCount + "개");
             }
             if (zone.Commands != null && zone.Commands.Any(c => !string.IsNullOrWhiteSpace(c)))
             {
@@ -2182,6 +2421,19 @@ namespace WinZoneTrigger
             }
         }
 
+        private void StyleSwitchToggle(CheckBox toggle, string checkedText, string uncheckedText)
+        {
+            if (toggle == null)
+            {
+                return;
+            }
+
+            toggle.Appearance = Appearance.Button;
+            toggle.AutoSize = false;
+            toggle.Text = toggle.Checked ? checkedText : uncheckedText;
+            StyleToggleButton(toggle);
+        }
+
         private void RenderWifiChoiceButtons(IEnumerable<string> selectedSsids, IEnumerable<WifiNetwork> visibleNetworks)
         {
             HashSet<string> selected = new HashSet<string>(
@@ -2690,7 +2942,14 @@ namespace WinZoneTrigger
             {
                 if (picker.ShowDialog(this) == DialogResult.OK && picker.SelectedTargets.Count > 0)
                 {
-                    SetAppWatchTarget(picker.SelectedTargets[0]);
+                    if (picker.SelectedTargets.Count == 1)
+                    {
+                        SetAppWatchTarget(picker.SelectedTargets[0]);
+                    }
+                    else
+                    {
+                        AddAppWatchTargets(picker.SelectedTargets);
+                    }
                 }
             }
         }
@@ -2710,23 +2969,148 @@ namespace WinZoneTrigger
             }
         }
 
-        private void SetAppWatchTarget(string target)
+        private void AddNewAppWatchItem()
         {
-            if (_appWatchTargetText == null)
+            CaptureCurrentZone();
+            ZoneRule zone = GetSelectedZone();
+            if (zone == null)
             {
+                MessageBox.Show(this, "앱 감시를 추가할 위치를 먼저 선택하세요.", "앱 감시", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
-            ClearSelectedAppWatchStatus();
-            _appWatchTargetText.Text = (target ?? "").Trim();
-            FillAppWatchProcessNameFromTarget(false);
-            if (_appWatchRequireWindowCheck != null
-                && ZoneRule.ShouldRequireWindowByDefault(_appWatchProcessText == null ? "" : _appWatchProcessText.Text, _appWatchTargetText.Text))
+            if (zone.AppWatchItems == null)
             {
-                _appWatchRequireWindowCheck.Checked = true;
+                zone.AppWatchItems = new List<AppWatchItem>();
             }
-            CaptureCurrentZone();
+
+            AppWatchItem item = AppWatchItem.CreateDefault();
+            item.Enabled = false;
+            zone.AppWatchItems.Add(item);
+            _selectedAppWatchItemId = item.Id;
+            zone.SyncLegacyAppWatchFields();
             CaptureGlobalSettings();
+            RenderAppWatchItems();
+            ResetAppWatchTimer();
+            AppendLog("앱 감시 항목을 추가했습니다: " + zone.Name);
+        }
+
+        private void RemoveSelectedAppWatchItem()
+        {
+            CaptureCurrentZone();
+            ZoneRule zone = GetSelectedZone();
+            AppWatchItem item = GetSelectedAppWatchItem(zone);
+            if (zone == null || item == null)
+            {
+                MessageBox.Show(this, "삭제할 앱 감시 항목을 먼저 선택하세요.", "앱 감시", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string name = BuildAppWatchLogName(zone, item);
+            zone.AppWatchItems.Remove(item);
+            ClearAppWatchStatus(zone.Id, item.Id);
+            _lastAppWatchChecks.Remove(BuildAppWatchStatusKey(zone.Id, item.Id));
+            _selectedAppWatchItemId = zone.AppWatchItems.Count == 0 ? null : zone.AppWatchItems[0].Id;
+            zone.SyncLegacyAppWatchFields();
+            CaptureGlobalSettings();
+            RenderAppWatchItems();
+            ResetAppWatchTimer();
+            AppendLog("앱 감시 항목을 삭제했습니다: " + name);
+        }
+
+        private void AddAppWatchTargets(IEnumerable<string> targets)
+        {
+            CaptureCurrentZone();
+            ZoneRule zone = GetSelectedZone();
+            if (zone == null)
+            {
+                MessageBox.Show(this, "앱 감시를 추가할 위치를 먼저 선택하세요.", "앱 감시", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (zone.AppWatchItems == null)
+            {
+                zone.AppWatchItems = new List<AppWatchItem>();
+            }
+
+            int added = 0;
+            foreach (string target in (targets ?? new List<string>()).Where(t => !string.IsNullOrWhiteSpace(t)))
+            {
+                string value = target.Trim();
+                string processName = AppWatchdog.InferProcessName(value);
+                AppWatchItem existing = FindMatchingAppWatchItem(zone, value, processName);
+                if (existing != null)
+                {
+                    _selectedAppWatchItemId = existing.Id;
+                    continue;
+                }
+
+                AppWatchItem item = AppWatchItem.CreateDefault();
+                item.LaunchTarget = value;
+                item.ProcessName = processName;
+                item.RequireWindow = ZoneRule.ShouldRequireWindowByDefault(processName, value);
+                item.Normalize();
+                zone.AppWatchItems.Add(item);
+                _selectedAppWatchItemId = item.Id;
+                added++;
+            }
+
+            zone.SyncLegacyAppWatchFields();
+            ClearSelectedAppWatchStatus();
+            CaptureGlobalSettings();
+            RenderAppWatchItems();
+            ResetAppWatchTimer();
+            if (added > 0)
+            {
+                AppendLog("앱 감시 항목을 추가했습니다: " + zone.Name + " · " + added + "개");
+            }
+        }
+
+        private void SetAppWatchTarget(string target)
+        {
+            CaptureCurrentZone();
+            ZoneRule zone = GetSelectedZone();
+            if (zone == null)
+            {
+                MessageBox.Show(this, "앱 감시를 설정할 위치를 먼저 선택하세요.", "앱 감시", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (zone.AppWatchItems == null)
+            {
+                zone.AppWatchItems = new List<AppWatchItem>();
+            }
+
+            AppWatchItem item = GetSelectedAppWatchItem(zone);
+            if (item == null)
+            {
+                item = AppWatchItem.CreateDefault();
+                zone.AppWatchItems.Add(item);
+                _selectedAppWatchItemId = item.Id;
+            }
+
+            bool wasEmpty = string.IsNullOrWhiteSpace(item.LaunchTarget) && string.IsNullOrWhiteSpace(item.ProcessName);
+            string value = (target ?? "").Trim();
+            item.LaunchTarget = value;
+            if (wasEmpty && !string.IsNullOrWhiteSpace(value))
+            {
+                item.Enabled = true;
+            }
+            string inferredProcessName = AppWatchdog.InferProcessName(value);
+            if (!string.IsNullOrWhiteSpace(inferredProcessName))
+            {
+                item.ProcessName = inferredProcessName;
+            }
+            if (ZoneRule.ShouldRequireWindowByDefault(item.ProcessName, value))
+            {
+                item.RequireWindow = true;
+            }
+            item.Normalize();
+            zone.SyncLegacyAppWatchFields();
+            ClearSelectedAppWatchStatus();
+            CaptureGlobalSettings();
+            RenderAppWatchItems();
+            ResetAppWatchTimer();
             RefreshSelectedAppWatchStatusLabel();
         }
 
@@ -2754,7 +3138,8 @@ namespace WinZoneTrigger
             CaptureCurrentZone();
             CaptureGlobalSettings();
             ZoneRule selected = GetSelectedZone();
-            string target = selected == null ? "" : selected.AppWatchLaunchTarget ?? "";
+            AppWatchItem item = GetSelectedAppWatchItem(selected);
+            string target = item == null ? "" : item.LaunchTarget ?? "";
             if (string.IsNullOrWhiteSpace(target))
             {
                 MessageBox.Show(this, "실행할 앱을 먼저 입력하거나 선택하세요.", "실행 테스트", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -2778,7 +3163,8 @@ namespace WinZoneTrigger
             CaptureCurrentZone();
             CaptureGlobalSettings();
             ZoneRule selected = GetSelectedZone();
-            RunAppWatchCheck(selected == null ? null : selected.Clone(), false, "앱 감시 상태 테스트", true);
+            AppWatchItem item = GetSelectedAppWatchItem(selected);
+            RunAppWatchCheck(selected == null ? null : selected.Clone(), item == null ? null : item.Clone(), false, "앱 감시 상태 테스트", true);
         }
 
         private void TestAppWatchRestart()
@@ -2786,7 +3172,8 @@ namespace WinZoneTrigger
             CaptureCurrentZone();
             CaptureGlobalSettings();
             ZoneRule selected = GetSelectedZone();
-            RunAppWatchCheck(selected == null ? null : selected.Clone(), true, "앱 감시 재실행 테스트", true);
+            AppWatchItem item = GetSelectedAppWatchItem(selected);
+            RunAppWatchCheck(selected == null ? null : selected.Clone(), item == null ? null : item.Clone(), true, "앱 감시 재실행 테스트", true);
         }
 
         private void UpdateAppWatchIntervalLimits()
@@ -2838,7 +3225,324 @@ namespace WinZoneTrigger
             return Convert.ToInt32(milliseconds);
         }
 
-        private void RunAppWatchCheck(ZoneRule zone, bool launchIfMissing, string reason, bool showMessage)
+        private void RenderAppWatchItems()
+        {
+            if (_appWatchItemsPanel == null)
+            {
+                return;
+            }
+
+            _appWatchItemsPanel.Controls.Clear();
+            ZoneRule zone = GetSelectedZone();
+            if (zone == null)
+            {
+                _selectedAppWatchItemId = null;
+                AddEmptyChipHint(_appWatchItemsPanel, "위치를 먼저 선택하세요");
+                LoadSelectedAppWatchItemToEditor(null);
+                return;
+            }
+
+            zone.Normalize();
+            EnsureSelectedAppWatchItem(zone);
+            List<AppWatchItem> items = zone.AppWatchItems == null ? new List<AppWatchItem>() : zone.AppWatchItems.Where(item => item != null).ToList();
+            if (items.Count == 0)
+            {
+                AddEmptyChipHint(_appWatchItemsPanel, "등록된 앱 감시 없음");
+                LoadSelectedAppWatchItemToEditor(zone);
+                return;
+            }
+
+            foreach (AppWatchItem item in items)
+            {
+                _appWatchItemsPanel.Controls.Add(CreateAppWatchItemRow(zone, item));
+            }
+
+            LoadSelectedAppWatchItemToEditor(zone);
+        }
+
+        private Control CreateAppWatchItemRow(ZoneRule zone, AppWatchItem item)
+        {
+            FlowLayoutPanel row = new FlowLayoutPanel();
+            row.AutoSize = false;
+            row.Width = 610;
+            row.Height = 36;
+            row.WrapContents = false;
+            row.Margin = new Padding(2, 2, 8, 2);
+            row.Tag = item.Id;
+
+            CheckBox toggle = new CheckBox();
+            toggle.Appearance = Appearance.Button;
+            toggle.AutoSize = false;
+            toggle.Size = new Size(58, 30);
+            toggle.Margin = new Padding(2, 3, 4, 3);
+            toggle.Tag = item.Id;
+            toggle.Checked = item.Enabled;
+            StyleSwitchToggle(toggle, "ON", "OFF");
+            toggle.CheckedChanged += delegate
+            {
+                if (_loadingSelection)
+                {
+                    return;
+                }
+
+                CaptureCurrentZone();
+                ZoneRule selectedZone = GetSelectedZone();
+                AppWatchItem selectedItem = FindAppWatchItem(selectedZone, Convert.ToString(toggle.Tag));
+                if (selectedZone == null || selectedItem == null)
+                {
+                    return;
+                }
+
+                selectedItem.Enabled = toggle.Checked;
+                selectedItem.Normalize();
+                selectedZone.SyncLegacyAppWatchFields();
+                _selectedAppWatchItemId = selectedItem.Id;
+                ClearAppWatchStatus(selectedZone.Id, selectedItem.Id);
+                CaptureGlobalSettings();
+                ResetAppWatchTimer();
+                ZoneRule zoneClone = selectedZone.Clone();
+                AppWatchItem itemClone = selectedItem.Clone();
+                AppendLog((selectedItem.Enabled ? "앱 감시를 시작했습니다: " : "앱 감시를 껐습니다: ") + BuildAppWatchLogName(selectedZone, selectedItem));
+                RenderAppWatchItems();
+                if (selectedItem.Enabled)
+                {
+                    RunAppWatchCheck(zoneClone, itemClone, true, "앱 감시 시작 확인", false);
+                }
+            };
+            row.Controls.Add(toggle);
+
+            Button chip = CreateValueChip(item.Id, BuildAppWatchItemChipText(item), string.Equals(_selectedAppWatchItemId, item.Id, StringComparison.OrdinalIgnoreCase));
+            chip.Size = new Size(500, 30);
+            chip.Margin = new Padding(0, 3, 4, 3);
+            chip.TextAlign = ContentAlignment.MiddleLeft;
+            if (_toolTip != null)
+            {
+                _toolTip.SetToolTip(chip, BuildAppWatchTooltipText(item));
+            }
+            chip.Click += delegate
+            {
+                if (_loadingSelection)
+                {
+                    return;
+                }
+
+                CaptureCurrentZone();
+                _selectedAppWatchItemId = Convert.ToString(chip.Tag);
+                RenderAppWatchItems();
+                RefreshSelectedAppWatchStatusLabel();
+            };
+            row.Controls.Add(chip);
+
+            return row;
+        }
+
+        private void EnsureSelectedAppWatchItem(ZoneRule zone)
+        {
+            if (zone == null || zone.AppWatchItems == null || zone.AppWatchItems.Count == 0)
+            {
+                _selectedAppWatchItemId = null;
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_selectedAppWatchItemId)
+                && zone.AppWatchItems.Any(item => item != null && string.Equals(item.Id, _selectedAppWatchItemId, StringComparison.OrdinalIgnoreCase)))
+            {
+                return;
+            }
+
+            AppWatchItem first = zone.AppWatchItems.FirstOrDefault(item => item != null);
+            _selectedAppWatchItemId = first == null ? null : first.Id;
+        }
+
+        private AppWatchItem GetSelectedAppWatchItem(ZoneRule zone)
+        {
+            if (zone == null)
+            {
+                return null;
+            }
+
+            zone.Normalize();
+            EnsureSelectedAppWatchItem(zone);
+            return FindAppWatchItem(zone, _selectedAppWatchItemId);
+        }
+
+        private static AppWatchItem FindAppWatchItem(ZoneRule zone, string itemId)
+        {
+            if (zone == null || zone.AppWatchItems == null || string.IsNullOrWhiteSpace(itemId))
+            {
+                return null;
+            }
+
+            return zone.AppWatchItems.FirstOrDefault(item => item != null && string.Equals(item.Id, itemId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static AppWatchItem FindMatchingAppWatchItem(ZoneRule zone, string launchTarget, string processName)
+        {
+            if (zone == null || zone.AppWatchItems == null)
+            {
+                return null;
+            }
+
+            string target = (launchTarget ?? "").Trim();
+            string process = AppWatchdog.NormalizeProcessName(processName);
+            return zone.AppWatchItems.FirstOrDefault(item =>
+                item != null
+                && ((!string.IsNullOrWhiteSpace(target) && string.Equals((item.LaunchTarget ?? "").Trim(), target, StringComparison.OrdinalIgnoreCase))
+                    || (!string.IsNullOrWhiteSpace(process) && string.Equals(AppWatchdog.NormalizeProcessName(item.ProcessName), process, StringComparison.OrdinalIgnoreCase))));
+        }
+
+        private void LoadSelectedAppWatchItemToEditor(ZoneRule zone)
+        {
+            bool previousLoading = _loadingSelection;
+            _loadingSelection = true;
+            try
+            {
+                AppWatchItem item = GetSelectedAppWatchItem(zone);
+                bool enabled = item != null;
+                SetAppWatchEditorEnabled(enabled);
+
+                _appWatchEnabledCheck.Checked = item != null && item.Enabled;
+                _appWatchRequireWindowCheck.Checked = item != null && item.RequireWindow.GetValueOrDefault(false);
+                _appWatchTargetText.Text = item == null ? "" : item.LaunchTarget ?? "";
+                _appWatchProcessText.Text = item == null ? "" : item.ProcessName ?? "";
+                SetAppWatchIntervalUnitSelection(item == null ? "Minutes" : item.IntervalUnit);
+                _appWatchIntervalInput.Value = item == null
+                    ? 5
+                    : Math.Max(_appWatchIntervalInput.Minimum, Math.Min(_appWatchIntervalInput.Maximum, item.IntervalValue));
+                StyleSwitchToggle(_appWatchEnabledCheck, "ON", "OFF");
+                StyleSwitchToggle(_appWatchRequireWindowCheck, "창 ON", "창 OFF");
+                UpdateAppWatchStatusLabel(item == null ? "등록된 앱 감시가 없습니다." : BuildCurrentAppWatchStatusText(zone, item));
+            }
+            finally
+            {
+                _loadingSelection = previousLoading;
+            }
+        }
+
+        private void SetAppWatchEditorEnabled(bool enabled)
+        {
+            if (_appWatchEnabledCheck != null)
+            {
+                _appWatchEnabledCheck.Enabled = enabled;
+            }
+            if (_appWatchRequireWindowCheck != null)
+            {
+                _appWatchRequireWindowCheck.Enabled = enabled;
+            }
+            if (_appWatchTargetText != null)
+            {
+                _appWatchTargetText.Enabled = enabled;
+            }
+            if (_appWatchProcessText != null)
+            {
+                _appWatchProcessText.Enabled = enabled;
+            }
+            if (_appWatchIntervalInput != null)
+            {
+                _appWatchIntervalInput.Enabled = enabled;
+            }
+            if (_appWatchIntervalUnitCombo != null)
+            {
+                _appWatchIntervalUnitCombo.Enabled = enabled;
+            }
+        }
+
+        private void CaptureSelectedAppWatchItemValues(ZoneRule zone)
+        {
+            if (_loadingSelection || zone == null)
+            {
+                return;
+            }
+
+            AppWatchItem item = GetSelectedAppWatchItem(zone);
+            if (item == null)
+            {
+                return;
+            }
+
+            item.Enabled = _appWatchEnabledCheck.Checked;
+            item.RequireWindow = _appWatchRequireWindowCheck.Checked;
+            item.LaunchTarget = _appWatchTargetText.Text.Trim();
+            item.ProcessName = _appWatchProcessText.Text.Trim();
+            item.IntervalValue = Convert.ToInt32(_appWatchIntervalInput.Value);
+            item.IntervalUnit = ReadAppWatchIntervalUnitSelection();
+            item.Normalize();
+            zone.SyncLegacyAppWatchFields();
+        }
+
+        private static string BuildAppWatchStatusKey(string zoneId, string itemId)
+        {
+            return (zoneId ?? "") + ":" + (itemId ?? "");
+        }
+
+        private void ClearAppWatchStatus(string zoneId, string itemId)
+        {
+            _lastAppWatchStatusTexts.Remove(BuildAppWatchStatusKey(zoneId, itemId));
+        }
+
+        private string BuildAppWatchLogName(ZoneRule zone, AppWatchItem item)
+        {
+            string zoneName = zone == null ? "선택 위치" : zone.Name;
+            string itemName = BuildAppWatchItemDisplayName(item);
+            return string.IsNullOrWhiteSpace(itemName) ? zoneName : zoneName + " · " + itemName;
+        }
+
+        private string BuildAppWatchItemChipText(AppWatchItem item)
+        {
+            string name = BuildAppWatchItemDisplayName(item);
+            string interval = BuildAppWatchIntervalText(item);
+            string window = item != null && item.RequireWindow.GetValueOrDefault(false) ? "창 확인" : "프로세스";
+            return ShortenText(name, 30) + " · " + interval + " · " + window;
+        }
+
+        private string BuildAppWatchTooltipText(AppWatchItem item)
+        {
+            if (item == null)
+            {
+                return "";
+            }
+
+            return "실행 대상: " + (item.LaunchTarget ?? "") + Environment.NewLine
+                + "프로세스: " + (item.ProcessName ?? "") + Environment.NewLine
+                + "체크 주기: " + BuildAppWatchIntervalText(item);
+        }
+
+        private string BuildAppWatchItemDisplayName(AppWatchItem item)
+        {
+            if (item == null)
+            {
+                return "";
+            }
+
+            string targetName = ShortenAppTargetForChip(item.LaunchTarget);
+            if (!string.IsNullOrWhiteSpace(targetName))
+            {
+                return targetName;
+            }
+
+            string process = AppWatchdog.NormalizeProcessName(item.ProcessName);
+            return string.IsNullOrWhiteSpace(process) ? "새 감시" : process;
+        }
+
+        private static string BuildAppWatchIntervalText(AppWatchItem item)
+        {
+            if (item == null)
+            {
+                return "5분";
+            }
+
+            bool hours = string.Equals(item.IntervalUnit, "Hours", StringComparison.OrdinalIgnoreCase);
+            return Math.Max(1, item.IntervalValue) + (hours ? "시간" : "분");
+        }
+
+        private sealed class AppWatchCheckTarget
+        {
+            public string ZoneId { get; set; }
+            public string ZoneName { get; set; }
+            public AppWatchItem Item { get; set; }
+        }
+
+        private void RunAppWatchCheck(ZoneRule zone, AppWatchItem item, bool launchIfMissing, string reason, bool showMessage)
         {
             CaptureGlobalSettings();
             if (zone == null)
@@ -2852,51 +3556,10 @@ namespace WinZoneTrigger
                 return;
             }
 
-            RunAppWatchChecks(new List<ZoneRule> { zone }, launchIfMissing, reason, showMessage);
-        }
-
-        private void RunDueAppWatchChecks(bool force, string reason)
-        {
-            DateTime now = DateTime.UtcNow;
-            List<ZoneRule> dueZones = new List<ZoneRule>();
-            foreach (ZoneRule zone in _config.Zones.Where(z => z.Enabled && z.AppWatchEnabled.GetValueOrDefault(false)))
+            if (item == null)
             {
-                zone.Normalize();
-                DateTime last;
-                int interval = GetAppWatchIntervalMilliseconds(zone.AppWatchIntervalValue, zone.AppWatchIntervalUnit);
-                bool due = force
-                    || !_lastAppWatchChecks.TryGetValue(zone.Id, out last)
-                    || (now - last).TotalMilliseconds >= interval;
-
-                if (due)
-                {
-                    _lastAppWatchChecks[zone.Id] = now;
-                    dueZones.Add(zone.Clone());
-                }
-            }
-
-            if (dueZones.Count > 0)
-            {
-                RunAppWatchChecks(dueZones, true, reason, false);
-            }
-        }
-
-        private void RunAppWatchChecks(List<ZoneRule> zones, bool launchIfMissing, string reason, bool showMessage)
-        {
-            if (zones == null || zones.Count == 0)
-            {
-                return;
-            }
-
-            ZoneRule firstZone = zones[0];
-            string processName = AppWatchdog.NormalizeProcessName(firstZone.AppWatchProcessName);
-            string launchTarget = firstZone.AppWatchLaunchTarget ?? "";
-
-            if (zones.Count == 1 && string.IsNullOrWhiteSpace(processName))
-            {
-                string message = "확인할 프로세스 이름을 입력하세요.";
+                string message = "앱 감시 항목을 먼저 선택하세요.";
                 UpdateAppWatchStatusLabel(message);
-                AppendLog(reason + " 실패(" + firstZone.Name + "): " + message);
                 if (showMessage)
                 {
                     MessageBox.Show(this, message, reason, MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -2904,11 +3567,85 @@ namespace WinZoneTrigger
                 return;
             }
 
-            if (zones.Count == 1 && launchIfMissing && string.IsNullOrWhiteSpace(launchTarget))
+            RunAppWatchChecks(new List<AppWatchCheckTarget>
+            {
+                new AppWatchCheckTarget
+                {
+                    ZoneId = zone.Id,
+                    ZoneName = zone.Name,
+                    Item = item.Clone()
+                }
+            }, launchIfMissing, reason, showMessage);
+        }
+
+        private void RunDueAppWatchChecks(bool force, string reason)
+        {
+            DateTime now = DateTime.UtcNow;
+            List<AppWatchCheckTarget> dueTargets = new List<AppWatchCheckTarget>();
+            foreach (ZoneRule zone in _config.Zones.Where(z => z.Enabled))
+            {
+                zone.Normalize();
+                foreach (AppWatchItem item in zone.GetEnabledAppWatchItems())
+                {
+                    item.Normalize();
+                    DateTime last;
+                    string key = BuildAppWatchStatusKey(zone.Id, item.Id);
+                    int interval = GetAppWatchIntervalMilliseconds(item.IntervalValue, item.IntervalUnit);
+                    bool due = force
+                        || !_lastAppWatchChecks.TryGetValue(key, out last)
+                        || (now - last).TotalMilliseconds >= interval;
+
+                    if (due)
+                    {
+                        _lastAppWatchChecks[key] = now;
+                        dueTargets.Add(new AppWatchCheckTarget
+                        {
+                            ZoneId = zone.Id,
+                            ZoneName = zone.Name,
+                            Item = item.Clone()
+                        });
+                    }
+                }
+            }
+
+            if (dueTargets.Count > 0)
+            {
+                RunAppWatchChecks(dueTargets, true, reason, false);
+            }
+        }
+
+        private void RunAppWatchChecks(List<AppWatchCheckTarget> targets, bool launchIfMissing, string reason, bool showMessage)
+        {
+            if (targets == null || targets.Count == 0)
+            {
+                return;
+            }
+
+            AppWatchCheckTarget firstTarget = targets[0];
+            AppWatchItem firstItem = firstTarget == null ? null : firstTarget.Item;
+            string processName = firstItem == null ? "" : AppWatchdog.NormalizeProcessName(firstItem.ProcessName);
+            string launchTarget = firstItem == null ? "" : firstItem.LaunchTarget ?? "";
+            string firstName = firstTarget == null
+                ? "선택 위치"
+                : firstTarget.ZoneName + " · " + BuildAppWatchItemDisplayName(firstItem);
+
+            if (targets.Count == 1 && string.IsNullOrWhiteSpace(processName))
+            {
+                string message = "확인할 프로세스 이름을 입력하세요.";
+                UpdateAppWatchStatusLabel(message);
+                AppendLog(reason + " 실패(" + firstName + "): " + message);
+                if (showMessage)
+                {
+                    MessageBox.Show(this, message, reason, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                return;
+            }
+
+            if (targets.Count == 1 && launchIfMissing && string.IsNullOrWhiteSpace(launchTarget))
             {
                 string message = "다시 실행할 앱 대상을 입력하세요.";
                 UpdateAppWatchStatusLabel(message);
-                AppendLog(reason + " 실패(" + firstZone.Name + "): " + message);
+                AppendLog(reason + " 실패(" + firstName + "): " + message);
                 if (showMessage)
                 {
                     MessageBox.Show(this, message, reason, MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -2928,16 +3665,24 @@ namespace WinZoneTrigger
             Task.Factory.StartNew(delegate
             {
                 List<AppWatchZoneResult> results = new List<AppWatchZoneResult>();
-                foreach (ZoneRule zone in zones)
+                foreach (AppWatchCheckTarget target in targets)
                 {
-                    zone.Normalize();
-                    string zoneProcessName = AppWatchdog.NormalizeProcessName(zone.AppWatchProcessName);
-                    string zoneLaunchTarget = zone.AppWatchLaunchTarget ?? "";
-                    bool zoneRequireWindow = zone.AppWatchRequireWindow.GetValueOrDefault(false);
+                    if (target == null || target.Item == null)
+                    {
+                        continue;
+                    }
+
+                    AppWatchItem item = target.Item.Clone();
+                    item.Normalize();
+                    string zoneProcessName = AppWatchdog.NormalizeProcessName(item.ProcessName);
+                    string zoneLaunchTarget = item.LaunchTarget ?? "";
+                    bool zoneRequireWindow = item.RequireWindow.GetValueOrDefault(false);
                     AppWatchZoneResult zoneResult = new AppWatchZoneResult
                     {
-                        ZoneId = zone.Id,
-                        ZoneName = zone.Name,
+                        ZoneId = target.ZoneId,
+                        ZoneName = target.ZoneName,
+                        ItemId = item.Id,
+                        ItemName = BuildAppWatchItemDisplayName(item),
                         LaunchTarget = zoneLaunchTarget
                     };
 
@@ -2964,7 +3709,7 @@ namespace WinZoneTrigger
                     }
 
                     zoneResult.CheckedAtLocal = DateTime.Now;
-                    zoneResult.NextCheckAtLocal = CalculateNextAppWatchCheckTime(zone, zoneResult.CheckedAtLocal);
+                    zoneResult.NextCheckAtLocal = CalculateNextAppWatchCheckTime(item, zoneResult.CheckedAtLocal);
                     results.Add(zoneResult);
                 }
 
@@ -2992,14 +3737,16 @@ namespace WinZoneTrigger
                         ? zoneResult.Result.Summary
                         : zoneResult.Error;
                     string displaySummary = BuildAppWatchDisplayText(zoneResult, summary);
+                    string key = BuildAppWatchStatusKey(zoneResult.ZoneId, zoneResult.ItemId);
 
-                    if (!string.IsNullOrWhiteSpace(zoneResult.ZoneId))
+                    if (!string.IsNullOrWhiteSpace(key))
                     {
-                        _lastAppWatchStatusTexts[zoneResult.ZoneId] = displaySummary;
+                        _lastAppWatchStatusTexts[key] = displaySummary;
                     }
 
-                    AppendLog(reason + " 결과(" + zoneResult.ZoneName + "): " + displaySummary);
-                    if (string.Equals(_currentZoneId, zoneResult.ZoneId, StringComparison.OrdinalIgnoreCase))
+                    AppendLog(reason + " 결과(" + zoneResult.ZoneName + " · " + zoneResult.ItemName + "): " + displaySummary);
+                    if (string.Equals(_currentZoneId, zoneResult.ZoneId, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(_selectedAppWatchItemId, zoneResult.ItemId, StringComparison.OrdinalIgnoreCase))
                     {
                         UpdateAppWatchStatusLabel(displaySummary);
                     }
@@ -3024,25 +3771,26 @@ namespace WinZoneTrigger
             }, TaskScheduler.FromCurrentSynchronizationContext());
         }
 
-        private string BuildCurrentAppWatchStatusText(ZoneRule zone)
+        private string BuildCurrentAppWatchStatusText(ZoneRule zone, AppWatchItem item)
         {
-            if (zone == null)
+            if (zone == null || item == null)
             {
                 return "아직 확인 전입니다.";
             }
 
             string status;
-            if (!string.IsNullOrWhiteSpace(zone.Id) && _lastAppWatchStatusTexts.TryGetValue(zone.Id, out status))
+            string key = BuildAppWatchStatusKey(zone.Id, item.Id);
+            if (!string.IsNullOrWhiteSpace(key) && _lastAppWatchStatusTexts.TryGetValue(key, out status))
             {
                 return status;
             }
 
-            return BuildPendingAppWatchStatusText(zone);
+            return BuildPendingAppWatchStatusText(zone, item);
         }
 
-        private string BuildPendingAppWatchStatusText(ZoneRule zone)
+        private string BuildPendingAppWatchStatusText(ZoneRule zone, AppWatchItem item)
         {
-            if (zone == null)
+            if (zone == null || item == null)
             {
                 return "아직 확인 전입니다.";
             }
@@ -3052,27 +3800,28 @@ namespace WinZoneTrigger
                 return "앱 감시 대기 · 위치 미운영";
             }
 
-            if (!zone.AppWatchEnabled.GetValueOrDefault(false))
+            if (!item.Enabled)
             {
                 return "앱 감시 꺼짐";
             }
 
-            DateTime? next = EstimateNextAppWatchCheckTime(zone);
+            DateTime? next = EstimateNextAppWatchCheckTime(zone, item);
             return next.HasValue
                 ? "아직 확인 전입니다. · 다음 확인 " + FormatAppWatchTimestamp(next.Value)
                 : "아직 확인 전입니다.";
         }
 
-        private DateTime? EstimateNextAppWatchCheckTime(ZoneRule zone)
+        private DateTime? EstimateNextAppWatchCheckTime(ZoneRule zone, AppWatchItem item)
         {
-            if (zone == null || !zone.Enabled || !zone.AppWatchEnabled.GetValueOrDefault(false))
+            if (zone == null || item == null || !zone.Enabled || !item.Enabled)
             {
                 return null;
             }
 
-            int interval = GetAppWatchIntervalMilliseconds(zone.AppWatchIntervalValue, zone.AppWatchIntervalUnit);
+            int interval = GetAppWatchIntervalMilliseconds(item.IntervalValue, item.IntervalUnit);
             DateTime lastUtc;
-            if (!string.IsNullOrWhiteSpace(zone.Id) && _lastAppWatchChecks.TryGetValue(zone.Id, out lastUtc))
+            string key = BuildAppWatchStatusKey(zone.Id, item.Id);
+            if (!string.IsNullOrWhiteSpace(key) && _lastAppWatchChecks.TryGetValue(key, out lastUtc))
             {
                 DateTime next = lastUtc.ToLocalTime().AddMilliseconds(interval);
                 return next < DateTime.Now ? DateTime.Now : next;
@@ -3101,7 +3850,8 @@ namespace WinZoneTrigger
                 return;
             }
 
-            UpdateAppWatchStatusLabel(BuildCurrentAppWatchStatusText(selected));
+            AppWatchItem item = GetSelectedAppWatchItem(selected);
+            UpdateAppWatchStatusLabel(item == null ? "등록된 앱 감시가 없습니다." : BuildCurrentAppWatchStatusText(selected, item));
         }
 
         private void ClearSelectedAppWatchStatus()
@@ -3111,17 +3861,17 @@ namespace WinZoneTrigger
                 return;
             }
 
-            _lastAppWatchStatusTexts.Remove(_currentZoneId);
+            _lastAppWatchStatusTexts.Remove(BuildAppWatchStatusKey(_currentZoneId, _selectedAppWatchItemId));
         }
 
-        private static DateTime? CalculateNextAppWatchCheckTime(ZoneRule zone, DateTime checkedAtLocal)
+        private static DateTime? CalculateNextAppWatchCheckTime(AppWatchItem item, DateTime checkedAtLocal)
         {
-            if (zone == null || !zone.Enabled || !zone.AppWatchEnabled.GetValueOrDefault(false))
+            if (item == null || !item.Enabled)
             {
                 return null;
             }
 
-            int interval = GetAppWatchIntervalMilliseconds(zone.AppWatchIntervalValue, zone.AppWatchIntervalUnit);
+            int interval = GetAppWatchIntervalMilliseconds(item.IntervalValue, item.IntervalUnit);
             return checkedAtLocal.AddMilliseconds(interval);
         }
 
@@ -3145,7 +3895,8 @@ namespace WinZoneTrigger
 
             string timing = BuildAppWatchTimingText(zoneResult, false);
             string target = BuildLaunchNotificationText(zoneResult.LaunchTarget);
-            string message = zoneResult.ZoneName + " · " + target;
+            string itemName = string.IsNullOrWhiteSpace(zoneResult.ItemName) ? target : zoneResult.ItemName;
+            string message = zoneResult.ZoneName + " · " + itemName + " · " + target;
             return string.IsNullOrWhiteSpace(timing) ? message : timing + " · " + message;
         }
 
@@ -3693,6 +4444,7 @@ namespace WinZoneTrigger
         {
             SetChildControlsEnabled(_conditionTable, enabled);
             SetChildControlsEnabled(_actionTable, enabled);
+            SetChildControlsEnabled(_appWatchTable, enabled);
         }
 
         private static void SetChildControlsEnabled(Control root, bool enabled)
@@ -3735,13 +4487,8 @@ namespace WinZoneTrigger
                 SetAudioActionSelection("None");
                 SetChromeUrls(new List<string>());
                 SetAppLaunches(new List<string>());
-                _appWatchEnabledCheck.Checked = false;
-                _appWatchRequireWindowCheck.Checked = false;
-                _appWatchTargetText.Text = "";
-                _appWatchProcessText.Text = "";
-                SetAppWatchIntervalUnitSelection("Minutes");
-                _appWatchIntervalInput.Value = 5;
-                UpdateAppWatchStatusLabel("아직 확인 전입니다.");
+                _selectedAppWatchItemId = null;
+                RenderAppWatchItems();
                 _commandsText.Text = "";
             }
             else
@@ -3767,13 +4514,7 @@ namespace WinZoneTrigger
                 SetAudioActionSelection(zone.AudioAction);
                 SetChromeUrls(zone.ChromeUrls);
                 SetAppLaunches(zone.AppLaunches);
-                _appWatchEnabledCheck.Checked = zone.AppWatchEnabled.GetValueOrDefault(false);
-                _appWatchRequireWindowCheck.Checked = zone.AppWatchRequireWindow.GetValueOrDefault(false);
-                _appWatchTargetText.Text = zone.AppWatchLaunchTarget ?? "";
-                _appWatchProcessText.Text = zone.AppWatchProcessName ?? "";
-                SetAppWatchIntervalUnitSelection(zone.AppWatchIntervalUnit);
-                _appWatchIntervalInput.Value = Math.Max(_appWatchIntervalInput.Minimum, Math.Min(_appWatchIntervalInput.Maximum, zone.AppWatchIntervalValue));
-                UpdateAppWatchStatusLabel(BuildCurrentAppWatchStatusText(zone));
+                RenderAppWatchItems();
                 _commandsText.Text = JoinLines(zone.Commands);
             }
 
@@ -3816,12 +4557,7 @@ namespace WinZoneTrigger
             }
             zone.ChromeUrls = GetChromeUrls();
             zone.AppLaunches = GetAppLaunches();
-            zone.AppWatchEnabled = _appWatchEnabledCheck.Checked;
-            zone.AppWatchRequireWindow = _appWatchRequireWindowCheck.Checked;
-            zone.AppWatchLaunchTarget = _appWatchTargetText.Text.Trim();
-            zone.AppWatchProcessName = _appWatchProcessText.Text.Trim();
-            zone.AppWatchIntervalValue = Convert.ToInt32(_appWatchIntervalInput.Value);
-            zone.AppWatchIntervalUnit = ReadAppWatchIntervalUnitSelection();
+            CaptureSelectedAppWatchItemValues(zone);
             zone.Commands = SplitLines(_commandsText.Text);
             UpdateSelectedZoneSummary();
         }
@@ -3838,12 +4574,21 @@ namespace WinZoneTrigger
             _config.ScanIntervalSeconds = GetShortestContinuousScanIntervalSeconds();
             _config.StartMinimized = _startMinimizedCheck.Checked;
             _config.AppWatchEnabled = HasAppWatchZones();
-            ZoneRule firstAppWatchZone = _config.Zones.FirstOrDefault(z => z.Enabled && z.AppWatchEnabled.GetValueOrDefault(false));
-            _config.AppWatchLaunchTarget = firstAppWatchZone == null ? "" : firstAppWatchZone.AppWatchLaunchTarget;
-            _config.AppWatchProcessName = firstAppWatchZone == null ? "" : firstAppWatchZone.AppWatchProcessName;
-            _config.AppWatchRequireWindow = firstAppWatchZone == null ? false : firstAppWatchZone.AppWatchRequireWindow;
-            _config.AppWatchIntervalValue = firstAppWatchZone == null ? 5 : firstAppWatchZone.AppWatchIntervalValue;
-            _config.AppWatchIntervalUnit = firstAppWatchZone == null ? "Minutes" : firstAppWatchZone.AppWatchIntervalUnit;
+            AppWatchItem firstAppWatchItem = null;
+            foreach (ZoneRule zone in _config.Zones.Where(z => z.Enabled))
+            {
+                zone.Normalize();
+                firstAppWatchItem = zone.GetEnabledAppWatchItems().FirstOrDefault();
+                if (firstAppWatchItem != null)
+                {
+                    break;
+                }
+            }
+            _config.AppWatchLaunchTarget = firstAppWatchItem == null ? "" : firstAppWatchItem.LaunchTarget;
+            _config.AppWatchProcessName = firstAppWatchItem == null ? "" : firstAppWatchItem.ProcessName;
+            _config.AppWatchRequireWindow = firstAppWatchItem == null ? false : firstAppWatchItem.RequireWindow;
+            _config.AppWatchIntervalValue = firstAppWatchItem == null ? 5 : firstAppWatchItem.IntervalValue;
+            _config.AppWatchIntervalUnit = firstAppWatchItem == null ? "Minutes" : firstAppWatchItem.IntervalUnit;
         }
 
         private static void RestoreDetectionCondition(ZoneRule target, ZoneRule source)
@@ -4089,7 +4834,16 @@ namespace WinZoneTrigger
             copy.Id = Guid.NewGuid().ToString("N");
             copy.Name = BuildDuplicateZoneName(selected.Name);
             copy.Enabled = false;
-            copy.AppWatchEnabled = false;
+            if (copy.AppWatchItems != null)
+            {
+                foreach (AppWatchItem item in copy.AppWatchItems)
+                {
+                    if (item != null)
+                    {
+                        item.Enabled = false;
+                    }
+                }
+            }
             copy.Normalize();
 
             _config.Zones.Add(copy);
@@ -4185,7 +4939,7 @@ namespace WinZoneTrigger
 
         private bool HasAppWatchZones()
         {
-            return _config.Zones.Any(z => z.Enabled && z.AppWatchEnabled.GetValueOrDefault(false));
+            return _config.Zones.Any(z => z.Enabled && z.GetEnabledAppWatchItems().Any());
         }
 
         private int GetShortestContinuousScanIntervalSeconds()
@@ -4201,8 +4955,9 @@ namespace WinZoneTrigger
         private int GetShortestAppWatchIntervalMilliseconds()
         {
             List<int> intervals = _config.Zones
-                .Where(z => z.Enabled && z.AppWatchEnabled.GetValueOrDefault(false))
-                .Select(z => GetAppWatchIntervalMilliseconds(z.AppWatchIntervalValue, z.AppWatchIntervalUnit))
+                .Where(z => z.Enabled)
+                .SelectMany(z => z.GetEnabledAppWatchItems())
+                .Select(item => GetAppWatchIntervalMilliseconds(item.IntervalValue, item.IntervalUnit))
                 .ToList();
 
             return intervals.Count == 0 ? GetAppWatchIntervalMilliseconds(5, "Minutes") : intervals.Min();
@@ -5571,6 +6326,8 @@ $culture = [Globalization.CultureInfo]::InvariantCulture
     {
         public string ZoneId { get; set; }
         public string ZoneName { get; set; }
+        public string ItemId { get; set; }
+        public string ItemName { get; set; }
         public string LaunchTarget { get; set; }
         public DateTime CheckedAtLocal { get; set; }
         public DateTime? NextCheckAtLocal { get; set; }
