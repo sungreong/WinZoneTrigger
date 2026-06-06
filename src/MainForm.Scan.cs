@@ -20,6 +20,11 @@ namespace WinZoneTrigger
     {
         private void ScanTimerTick(object sender, EventArgs e)
         {
+            if (IsShuttingDown())
+            {
+                return;
+            }
+
             CaptureCurrentZone();
             CaptureGlobalSettings();
             if (HasZoneConditionScanZones())
@@ -30,6 +35,11 @@ namespace WinZoneTrigger
 
         private void AppWatchTimerTick(object sender, EventArgs e)
         {
+            if (IsShuttingDown())
+            {
+                return;
+            }
+
             CaptureCurrentZone();
             CaptureGlobalSettings();
             if (HasAppWatchZones())
@@ -105,6 +115,11 @@ namespace WinZoneTrigger
 
         private void StartScan(bool forceScan, bool startupOnly)
         {
+            if (IsShuttingDown())
+            {
+                return;
+            }
+
             if (_scanInProgress)
             {
                 return;
@@ -120,20 +135,36 @@ namespace WinZoneTrigger
                 return CreateScanSnapshot(forceScan, _config.Zones.Any(z => z.Enabled && z.UseCoordinates));
             }).ContinueWith(delegate(Task<ScanSnapshot> task)
             {
-                _scanInProgress = false;
-
-                if (task.IsFaulted)
+                try
                 {
-                    string message = task.Exception == null ? "알 수 없는 확인 오류입니다." : task.Exception.GetBaseException().Message;
-                    AppendLog("위치 확인 실패: " + message);
-                    if (_startupRetryActive && _startupRetryAttemptsRemaining <= 0)
+                    _scanInProgress = false;
+                    if (IsShuttingDown())
                     {
-                        StopStartupRetry("활성 위치를 찾지 못해 부팅 초기 확인을 종료합니다.");
+                        return;
                     }
-                    return;
-                }
 
-                ProcessScanResult(task.Result, startupOnly);
+                    if (task.IsFaulted)
+                    {
+                        string message = task.Exception == null ? "알 수 없는 확인 오류입니다." : task.Exception.GetBaseException().Message;
+                        AppendLog("위치 확인 실패: " + message);
+                        if (_startupRetryActive && _startupRetryAttemptsRemaining <= 0)
+                        {
+                            StopStartupRetry("활성 위치를 찾지 못해 부팅 초기 확인을 종료합니다.");
+                        }
+                        return;
+                    }
+
+                    ProcessScanResult(task.Result, startupOnly);
+                }
+                catch (Exception ex)
+                {
+                    _scanInProgress = false;
+                    DiagnosticsLog.Write("위치 확인 결과 처리 실패", ex);
+                    if (!IsShuttingDown())
+                    {
+                        AppendLog("위치 확인 결과 처리 실패: " + ex.Message);
+                    }
+                }
             }, TaskScheduler.FromCurrentSynchronizationContext());
         }
 
@@ -498,7 +529,7 @@ namespace WinZoneTrigger
 
         private void SafeLog(string message)
         {
-            if (IsDisposed)
+            if (IsShuttingDown())
             {
                 return;
             }
@@ -515,19 +546,31 @@ namespace WinZoneTrigger
             }
             else
             {
-                AppendLog(message);
+                try
+                {
+                    AppendLog(message);
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticsLog.Write("로그 기록 실패", ex);
+                }
             }
         }
 
         private void AppendLog(string message)
         {
+            if (IsShuttingDown())
+            {
+                return;
+            }
+
             string line = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + message + Environment.NewLine;
-            if (_recentLogLabel != null)
+            if (_recentLogLabel != null && !_recentLogLabel.IsDisposed)
             {
                 _recentLogLabel.Text = message;
             }
 
-            if (_logText == null)
+            if (_logText == null || _logText.IsDisposed)
             {
                 return;
             }
@@ -644,6 +687,11 @@ namespace WinZoneTrigger
 
         private void ShowMainWindow()
         {
+            if (IsShuttingDown())
+            {
+                return;
+            }
+
             Show();
             WindowState = FormWindowState.Normal;
             Activate();
@@ -662,12 +710,21 @@ namespace WinZoneTrigger
             {
                 BeginInvoke(new Action(delegate
                 {
-                    StartStartupRetrySequence();
+                    if (!IsShuttingDown())
+                    {
+                        StartStartupRetrySequence();
+                    }
                 }));
             }
             else if (HasZoneConditionScanZones())
             {
-                BeginInvoke(new Action(delegate { StartScan(false, false); }));
+                BeginInvoke(new Action(delegate
+                {
+                    if (!IsShuttingDown())
+                    {
+                        StartScan(false, false);
+                    }
+                }));
             }
         }
 
@@ -677,17 +734,36 @@ namespace WinZoneTrigger
             {
                 e.Cancel = true;
                 Hide();
-                _trayIcon.ShowBalloonTip(2000, "위치 자동 실행", "트레이에서 계속 실행 중입니다.", ToolTipIcon.Info);
+                ShowTrayNotification("위치 자동 실행", "트레이에서 계속 실행 중입니다.");
                 return;
             }
 
+            _isExiting = true;
+            _appWatchRunVersion++;
+            _scanTimer.Stop();
+            _startupRetryTimer.Stop();
+            _appWatchTimer.Stop();
+
             if (_trayIcon != null)
             {
-                _trayIcon.Visible = false;
-                _trayIcon.Dispose();
+                try
+                {
+                    _trayIcon.Visible = false;
+                    _trayIcon.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticsLog.Write("트레이 아이콘 정리 실패", ex);
+                }
+                _trayIcon = null;
             }
 
             base.OnFormClosing(e);
+        }
+
+        private bool IsShuttingDown()
+        {
+            return _isExiting || IsDisposed || Disposing;
         }
 
         private sealed class ZoneListItem

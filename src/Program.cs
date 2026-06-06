@@ -21,6 +21,24 @@ namespace WinZoneTrigger
         [STAThread]
         private static void Main(string[] args)
         {
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+            Application.ThreadException += delegate(object sender, ThreadExceptionEventArgs e)
+            {
+                DiagnosticsLog.Write("UI 스레드 예외", e == null ? null : e.Exception);
+            };
+            AppDomain.CurrentDomain.UnhandledException += delegate(object sender, UnhandledExceptionEventArgs e)
+            {
+                DiagnosticsLog.Write("처리되지 않은 앱 예외", e == null ? null : e.ExceptionObject as Exception);
+            };
+            TaskScheduler.UnobservedTaskException += delegate(object sender, UnobservedTaskExceptionEventArgs e)
+            {
+                DiagnosticsLog.Write("관찰되지 않은 작업 예외", e == null ? null : e.Exception);
+                if (e != null)
+                {
+                    e.SetObserved();
+                }
+            };
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             bool startMinimized = args != null && args.Any(a => string.Equals(a, "--minimized", StringComparison.OrdinalIgnoreCase));

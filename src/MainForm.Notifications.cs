@@ -20,7 +20,7 @@ namespace WinZoneTrigger
     {
         private void ShowTrayNotification(string title, string message)
         {
-            if (IsDisposed)
+            if (IsShuttingDown())
             {
                 return;
             }
@@ -37,7 +37,7 @@ namespace WinZoneTrigger
                 return;
             }
 
-            if (_trayIcon == null)
+            if (_trayIcon == null || !_trayIcon.Visible)
             {
                 return;
             }

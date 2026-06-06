@@ -27,6 +27,11 @@ namespace WinZoneTrigger
 
         private void RunAppWatchCheck(ZoneRule zone, AppWatchItem item, bool launchIfMissing, string reason, bool showMessage)
         {
+            if (IsShuttingDown())
+            {
+                return;
+            }
+
             CaptureGlobalSettings();
             if (zone == null)
             {
@@ -63,6 +68,17 @@ namespace WinZoneTrigger
 
         private void RunDueAppWatchChecks(bool force, string reason)
         {
+            if (IsShuttingDown())
+            {
+                return;
+            }
+
+            if (_appWatchInProgress)
+            {
+                AppendLog(reason + " 건너뜀: 이전 확인이 아직 진행 중입니다.");
+                return;
+            }
+
             DateTime now = DateTime.UtcNow;
             List<AppWatchCheckTarget> dueTargets = new List<AppWatchCheckTarget>();
             foreach (ZoneRule zone in _config.Zones.Where(z => z.Enabled && IsZoneActive(z)))
@@ -99,6 +115,11 @@ namespace WinZoneTrigger
 
         private void RunAppWatchCheckWhenZoneIsActive(ZoneRule zone, AppWatchItem item, string reason)
         {
+            if (IsShuttingDown())
+            {
+                return;
+            }
+
             if (zone == null || item == null)
             {
                 RunAppWatchCheck(zone, item, true, reason, false);
@@ -122,6 +143,11 @@ namespace WinZoneTrigger
 
         private void RunAppWatchChecks(List<AppWatchCheckTarget> targets, bool launchIfMissing, string reason, bool showMessage)
         {
+            if (IsShuttingDown())
+            {
+                return;
+            }
+
             if (targets == null || targets.Count == 0)
             {
                 return;
@@ -165,6 +191,7 @@ namespace WinZoneTrigger
                 return;
             }
 
+            int runVersion = _appWatchRunVersion;
             _appWatchInProgress = true;
             UpdateAppWatchStatusLabel(reason + " 중입니다... (" + FormatAppWatchTimestamp(DateTime.Now) + ")");
 
@@ -173,6 +200,11 @@ namespace WinZoneTrigger
                 List<AppWatchZoneResult> results = new List<AppWatchZoneResult>();
                 foreach (AppWatchCheckTarget target in targets)
                 {
+                    if (runVersion != _appWatchRunVersion)
+                    {
+                        break;
+                    }
+
                     if (target == null || target.Item == null)
                     {
                         continue;
@@ -222,59 +254,112 @@ namespace WinZoneTrigger
                 return results;
             }).ContinueWith(delegate(Task<List<AppWatchZoneResult>> task)
             {
-                _appWatchInProgress = false;
-
-                if (task.IsFaulted)
+                try
                 {
-                    string message = task.Exception == null ? "알 수 없는 앱 감시 오류입니다." : task.Exception.GetBaseException().Message;
-                    UpdateAppWatchStatusLabel(message);
-                    AppendLog(reason + " 실패: " + message);
+                    _appWatchInProgress = false;
+                    if (IsShuttingDown())
+                    {
+                        return;
+                    }
+
+                    if (runVersion != _appWatchRunVersion)
+                    {
+                        AppendLog(reason + " 결과 무시: 앱 감시 설정이 변경되었습니다.");
+                        RefreshSelectedAppWatchStatusLabel();
+                        return;
+                    }
+
+                    if (task.IsFaulted)
+                    {
+                        string message = task.Exception == null ? "알 수 없는 앱 감시 오류입니다." : task.Exception.GetBaseException().Message;
+                        UpdateAppWatchStatusLabel(message);
+                        AppendLog(reason + " 실패: " + message);
+                        if (showMessage)
+                        {
+                            MessageBox.Show(this, message, reason + " 실패", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        }
+                        return;
+                    }
+
+                    List<AppWatchZoneResult> results = task.Result ?? new List<AppWatchZoneResult>();
+                    foreach (AppWatchZoneResult zoneResult in results)
+                    {
+                        if (!showMessage && !IsAppWatchResultStillRelevant(zoneResult))
+                        {
+                            continue;
+                        }
+
+                        string summary = BuildAppWatchResultSummary(zoneResult);
+                        string displaySummary = BuildAppWatchDisplayText(zoneResult, summary);
+                        string key = BuildAppWatchStatusKey(zoneResult.ZoneId, zoneResult.ItemId);
+
+                        if (!string.IsNullOrWhiteSpace(key))
+                        {
+                            _lastAppWatchStatusTexts[key] = displaySummary;
+                        }
+
+                        AppendLog(reason + " 결과(" + zoneResult.ZoneName + " · " + zoneResult.ItemName + "): " + displaySummary);
+                        if (string.Equals(_currentZoneId, zoneResult.ZoneId, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(_selectedAppWatchItemId, zoneResult.ItemId, StringComparison.OrdinalIgnoreCase))
+                        {
+                            UpdateAppWatchStatusLabel(displaySummary);
+                        }
+
+                        if (zoneResult.Result != null && zoneResult.Result.LaunchAttempted)
+                        {
+                            ShowTrayNotification("앱 감시 재실행", BuildAppWatchNotificationText(zoneResult));
+                        }
+                    }
+
                     if (showMessage)
                     {
-                        MessageBox.Show(this, message, reason + " 실패", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    }
-                    return;
-                }
-
-                List<AppWatchZoneResult> results = task.Result ?? new List<AppWatchZoneResult>();
-                foreach (AppWatchZoneResult zoneResult in results)
-                {
-                    string summary = string.IsNullOrWhiteSpace(zoneResult.Error)
-                        ? zoneResult.Result.Summary
-                        : zoneResult.Error;
-                    string displaySummary = BuildAppWatchDisplayText(zoneResult, summary);
-                    string key = BuildAppWatchStatusKey(zoneResult.ZoneId, zoneResult.ItemId);
-
-                    if (!string.IsNullOrWhiteSpace(key))
-                    {
-                        _lastAppWatchStatusTexts[key] = displaySummary;
-                    }
-
-                    AppendLog(reason + " 결과(" + zoneResult.ZoneName + " · " + zoneResult.ItemName + "): " + displaySummary);
-                    if (string.Equals(_currentZoneId, zoneResult.ZoneId, StringComparison.OrdinalIgnoreCase)
-                        && string.Equals(_selectedAppWatchItemId, zoneResult.ItemId, StringComparison.OrdinalIgnoreCase))
-                    {
-                        UpdateAppWatchStatusLabel(displaySummary);
-                    }
-
-                    if (zoneResult.Result != null && zoneResult.Result.LaunchAttempted)
-                    {
-                        ShowTrayNotification("앱 감시 재실행", BuildAppWatchNotificationText(zoneResult));
+                        AppWatchZoneResult firstResult = results.FirstOrDefault();
+                        string message = firstResult == null
+                            ? "앱 감시 결과가 없습니다."
+                            : BuildAppWatchDisplayText(firstResult, BuildAppWatchResultSummary(firstResult));
+                        bool ok = firstResult != null && firstResult.Result != null && firstResult.Result.MeetsRequirement;
+                        MessageBox.Show(this, message, reason, MessageBoxButtons.OK, ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
                     }
                 }
-
-                if (showMessage)
+                catch (Exception ex)
                 {
-                    AppWatchZoneResult firstResult = results.FirstOrDefault();
-                    string message = firstResult == null
-                        ? "앱 감시 결과가 없습니다."
-                        : BuildAppWatchDisplayText(
-                            firstResult,
-                            string.IsNullOrWhiteSpace(firstResult.Error) ? firstResult.Result.Summary : firstResult.Error);
-                    bool ok = firstResult != null && firstResult.Result != null && firstResult.Result.MeetsRequirement;
-                    MessageBox.Show(this, message, reason, MessageBoxButtons.OK, ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+                    _appWatchInProgress = false;
+                    DiagnosticsLog.Write("앱 감시 결과 처리 실패", ex);
+                    SafeLog("앱 감시 결과 처리 실패: " + ex.Message);
                 }
             }, TaskScheduler.FromCurrentSynchronizationContext());
+        }
+
+        private bool IsAppWatchResultStillRelevant(AppWatchZoneResult zoneResult)
+        {
+            if (zoneResult == null)
+            {
+                return false;
+            }
+
+            ZoneRule zone = FindZone(zoneResult.ZoneId);
+            AppWatchItem item = FindAppWatchItem(zone, zoneResult.ItemId);
+            return zone != null && zone.Enabled && IsZoneActive(zone) && item != null && item.Enabled;
+        }
+
+        private static string BuildAppWatchResultSummary(AppWatchZoneResult zoneResult)
+        {
+            if (zoneResult == null)
+            {
+                return "앱 감시 결과가 없습니다.";
+            }
+
+            if (!string.IsNullOrWhiteSpace(zoneResult.Error))
+            {
+                return zoneResult.Error;
+            }
+
+            if (zoneResult.Result == null || string.IsNullOrWhiteSpace(zoneResult.Result.Summary))
+            {
+                return "앱 감시 결과를 확인할 수 없습니다.";
+            }
+
+            return zoneResult.Result.Summary;
         }
 
         private string BuildCurrentAppWatchStatusText(ZoneRule zone, AppWatchItem item)
@@ -434,9 +519,21 @@ namespace WinZoneTrigger
 
         private void UpdateAppWatchStatusLabel(string text)
         {
-            if (_appWatchStatusLabel != null)
+            if (IsShuttingDown())
             {
-                _appWatchStatusLabel.Text = text;
+                return;
+            }
+
+            if (_appWatchStatusLabel != null && !_appWatchStatusLabel.IsDisposed)
+            {
+                try
+                {
+                    _appWatchStatusLabel.Text = text;
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticsLog.Write("앱 감시 상태 표시 실패", ex);
+                }
             }
         }
     }

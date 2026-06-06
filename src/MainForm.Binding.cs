@@ -778,6 +778,11 @@ namespace WinZoneTrigger
 
         private void ResetScanTimer()
         {
+            if (IsShuttingDown())
+            {
+                return;
+            }
+
             _scanTimer.Stop();
             _scanTimer.Tick -= ScanTimerTick;
             _scanTimer.Interval = Math.Max(5, GetShortestConditionScanIntervalSeconds()) * 1000;
@@ -790,6 +795,12 @@ namespace WinZoneTrigger
 
         private void ResetAppWatchTimer()
         {
+            if (IsShuttingDown())
+            {
+                return;
+            }
+
+            _appWatchRunVersion++;
             _appWatchTimer.Stop();
             _appWatchTimerStartedAtLocal = null;
             if (HasAppWatchZones())

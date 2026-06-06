@@ -29,12 +29,14 @@ namespace WinZoneTrigger
         private AppConfig _config;
         private bool _loadingSelection;
         private bool _allowExit;
+        private bool _isExiting;
         private bool _scanInProgress;
         private bool _appWatchInProgress;
         private bool _startupRetryActive;
         private int _startupRetryAttemptsRemaining;
         private int _startupRetryAttemptsTotal;
         private bool _lastScanHadActiveZone;
+        private int _appWatchRunVersion;
         private DateTime? _appWatchTimerStartedAtLocal;
         private string _currentZoneId;
 
