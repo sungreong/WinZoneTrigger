@@ -330,7 +330,7 @@ namespace WinZoneTrigger
                     return;
                 }
 
-                label.BackColor = Color.Transparent;
+                label.BackColor = GetStableBackColor(label);
                 if (string.Equals(tag, "Muted", StringComparison.OrdinalIgnoreCase))
                 {
                     label.ForeColor = UiTextMuted;
@@ -356,7 +356,7 @@ namespace WinZoneTrigger
                 CheckBox checkBox = (CheckBox)control;
                 checkBox.ForeColor = UiText;
                 checkBox.FlatStyle = FlatStyle.Flat;
-                checkBox.BackColor = Color.Transparent;
+                checkBox.BackColor = GetStableBackColor(checkBox);
             }
             else if (control is ComboBox)
             {
@@ -407,6 +407,17 @@ namespace WinZoneTrigger
             _logText.Font = new Font("Consolas", 9F, FontStyle.Regular, GraphicsUnit.Point);
             _logText.BorderStyle = BorderStyle.None;
             _logText.Padding = new Padding(8);
+        }
+
+        private static Color GetStableBackColor(Control control)
+        {
+            Control parent = control == null ? null : control.Parent;
+            if (parent != null && parent.BackColor != Color.Transparent)
+            {
+                return parent.BackColor;
+            }
+
+            return UiSurface;
         }
 
         private Button CreateButton(string text)
