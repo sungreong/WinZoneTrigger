@@ -18,6 +18,8 @@ namespace WinZoneTrigger
 {
     internal static class Program
     {
+        private static Mutex _singleInstanceMutex;
+
         [STAThread]
         private static void Main(string[] args)
         {
@@ -49,11 +51,70 @@ namespace WinZoneTrigger
                 + " / args=" + FormatArguments(args)
                 + " / parents=" + ProcessDiagnostics.FormatParentChain(parentChain));
 
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            bool startMinimized = args != null && args.Any(a => string.Equals(a, "--minimized", StringComparison.OrdinalIgnoreCase));
-            bool startedFromWindowsStartup = args != null && args.Any(a => string.Equals(a, "--startup", StringComparison.OrdinalIgnoreCase));
-            Application.Run(new MainForm(startMinimized, startedFromWindowsStartup));
+            if (!TryAcquireSingleInstance())
+            {
+                return;
+            }
+
+            try
+            {
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                bool startMinimized = args != null && args.Any(a => string.Equals(a, "--minimized", StringComparison.OrdinalIgnoreCase));
+                bool startedFromWindowsStartup = args != null && args.Any(a => string.Equals(a, "--startup", StringComparison.OrdinalIgnoreCase));
+                Application.Run(new MainForm(startMinimized, startedFromWindowsStartup));
+            }
+            finally
+            {
+                ReleaseSingleInstance();
+            }
+        }
+
+        private static bool TryAcquireSingleInstance()
+        {
+            try
+            {
+                bool createdNew;
+                _singleInstanceMutex = new Mutex(true, @"Local\WinZoneTrigger.SingleInstance", out createdNew);
+                if (createdNew)
+                {
+                    DiagnosticsLog.WriteEvent("단일 인스턴스 잠금 획득");
+                    return true;
+                }
+
+                DiagnosticsLog.WriteEvent("기존 인스턴스 감지: 새 인스턴스를 종료합니다.");
+                _singleInstanceMutex.Dispose();
+                _singleInstanceMutex = null;
+                return false;
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsLog.Write("단일 인스턴스 잠금 실패", ex);
+                return true;
+            }
+        }
+
+        private static void ReleaseSingleInstance()
+        {
+            if (_singleInstanceMutex == null)
+            {
+                return;
+            }
+
+            try
+            {
+                _singleInstanceMutex.ReleaseMutex();
+                DiagnosticsLog.WriteEvent("단일 인스턴스 잠금 해제");
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsLog.Write("단일 인스턴스 잠금 해제 실패", ex);
+            }
+            finally
+            {
+                _singleInstanceMutex.Dispose();
+                _singleInstanceMutex = null;
+            }
         }
 
         private static string FormatArguments(string[] args)

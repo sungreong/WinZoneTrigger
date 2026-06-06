@@ -26,6 +26,7 @@ namespace WinZoneTrigger
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("종료", null, delegate
             {
+                DiagnosticsLog.WriteEvent("트레이 종료 메뉴 클릭");
                 _allowExit = true;
                 Close();
             });
