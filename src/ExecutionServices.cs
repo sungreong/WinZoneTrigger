@@ -20,6 +20,11 @@ namespace WinZoneTrigger
     {
         public static void Execute(ZoneRule zone, Action<string> log)
         {
+            if (log == null)
+            {
+                log = delegate { };
+            }
+
             log("동작 실행 시작: " + zone.Name);
             bool wifiConnectRequested = zone.ConnectWifiEnabled.GetValueOrDefault(false);
             bool wifiConnectSucceeded = !wifiConnectRequested;
@@ -95,10 +100,11 @@ namespace WinZoneTrigger
             {
                 try
                 {
-                    AppLauncher.LaunchApp(app, log);
+                    AppLauncher.LaunchAppIfNotRunning(app, log);
                 }
                 catch (Exception ex)
                 {
+                    DiagnosticsLog.Write("앱 실행 실패: " + app, ex);
                     log("앱 실행 실패: " + app + " -> " + ex.Message);
                 }
             }

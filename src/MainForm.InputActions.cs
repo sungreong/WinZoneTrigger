@@ -510,8 +510,8 @@ namespace WinZoneTrigger
 
             try
             {
-                AppLauncher.LaunchApp(target, AppendLog);
-                ShowTrayNotification("앱 실행", BuildLaunchNotificationText(target));
+                AppLauncher.LaunchAppIfNotRunning(target, AppendLog);
+                ShowTrayNotification("앱 실행 테스트", "실행 상태를 확인했습니다: " + ShortenAppTargetForChip(target));
             }
             catch (Exception ex)
             {

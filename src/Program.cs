@@ -38,12 +38,37 @@ namespace WinZoneTrigger
                     e.SetObserved();
                 }
             };
+            Application.ApplicationExit += delegate
+            {
+                DiagnosticsLog.WriteEvent("앱 종료: ApplicationExit");
+            };
+
+            List<ProcessParentInfo> parentChain = ProcessDiagnostics.GetParentChain(Process.GetCurrentProcess().Id, 8);
+            DiagnosticsLog.WriteEvent("앱 시작: pid=" + Process.GetCurrentProcess().Id
+                + " / exe=" + Application.ExecutablePath
+                + " / args=" + FormatArguments(args)
+                + " / parents=" + ProcessDiagnostics.FormatParentChain(parentChain));
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             bool startMinimized = args != null && args.Any(a => string.Equals(a, "--minimized", StringComparison.OrdinalIgnoreCase));
             bool startedFromWindowsStartup = args != null && args.Any(a => string.Equals(a, "--startup", StringComparison.OrdinalIgnoreCase));
             Application.Run(new MainForm(startMinimized, startedFromWindowsStartup));
+        }
+
+        private static string FormatArguments(string[] args)
+        {
+            if (args == null || args.Length == 0)
+            {
+                return "none";
+            }
+
+            return string.Join(" ", args.Select(QuoteArgument).ToArray());
+        }
+
+        private static string QuoteArgument(string value)
+        {
+            return "\"" + (value ?? "").Replace("\"", "\\\"") + "\"";
         }
     }
 }

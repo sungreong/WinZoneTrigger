@@ -523,7 +523,15 @@ namespace WinZoneTrigger
 
             Task.Factory.StartNew(delegate
             {
-                ZoneExecutor.Execute(zone, SafeLog);
+                try
+                {
+                    ZoneExecutor.Execute(zone, SafeLog);
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticsLog.Write("동작 실행 실패: " + (zone == null ? "" : zone.Name), ex);
+                    SafeLog("동작 실행 실패: " + ex.Message);
+                }
             });
         }
 
@@ -531,6 +539,7 @@ namespace WinZoneTrigger
         {
             if (IsShuttingDown())
             {
+                DiagnosticsLog.WriteEvent(message);
                 return;
             }
 
@@ -559,6 +568,7 @@ namespace WinZoneTrigger
 
         private void AppendLog(string message)
         {
+            DiagnosticsLog.WriteEvent(message);
             if (IsShuttingDown())
             {
                 return;
@@ -730,6 +740,7 @@ namespace WinZoneTrigger
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            DiagnosticsLog.WriteEvent("폼 종료 요청: reason=" + e.CloseReason + " / allowExit=" + _allowExit + " / exiting=" + _isExiting);
             if (!_allowExit && e.CloseReason == CloseReason.UserClosing)
             {
                 e.Cancel = true;
@@ -759,6 +770,12 @@ namespace WinZoneTrigger
             }
 
             base.OnFormClosing(e);
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            DiagnosticsLog.WriteEvent("폼 종료 완료: reason=" + e.CloseReason);
+            base.OnFormClosed(e);
         }
 
         private bool IsShuttingDown()

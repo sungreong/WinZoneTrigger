@@ -65,8 +65,27 @@ namespace WinZoneTrigger
 
         public static void LaunchApp(string target, Action<string> log)
         {
+            LaunchApp(target, log, false);
+        }
+
+        public static void LaunchAppIfNotRunning(string target, Action<string> log)
+        {
+            LaunchApp(target, log, true);
+        }
+
+        private static void LaunchApp(string target, Action<string> log, bool skipIfRunning)
+        {
             string value = (target ?? "").Trim();
             if (value.Length == 0)
+            {
+                return;
+            }
+            if (log == null)
+            {
+                log = delegate { };
+            }
+
+            if (skipIfRunning && IsAppAlreadyRunning(value, log))
             {
                 return;
             }
@@ -175,6 +194,100 @@ namespace WinZoneTrigger
             }
 
             log("앱 실행 실패: 앱을 찾지 못했습니다: " + value);
+        }
+
+        private static bool IsAppAlreadyRunning(string target, Action<string> log)
+        {
+            List<string> processNames = BuildProcessNameCandidates(target);
+            if (processNames.Count == 0)
+            {
+                log("앱 실행 확인: 프로세스 이름을 추론하지 못해 실행을 시도합니다: " + target);
+                return false;
+            }
+
+            log("앱 실행 확인: " + target + " -> " + string.Join(", ", processNames.ToArray()));
+            foreach (string processName in processNames)
+            {
+                try
+                {
+                    AppWatchCheckResult result = AppWatchdog.Check(processName, false);
+                    if (result != null && result.IsRunning)
+                    {
+                        log("앱 실행 건너뜀: 이미 실행 중 - " + target + " / " + result.ProcessName + " (" + result.ProcessCount + "개)");
+                        return true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    log("앱 실행 확인 실패: " + target + " / " + processName + " -> " + ex.Message);
+                    DiagnosticsLog.Write("앱 실행 사전 확인 실패: " + target + " / " + processName, ex);
+                }
+            }
+
+            log("앱 실행 확인: 실행 중인 프로세스 없음 - " + target);
+            return false;
+        }
+
+        private static List<string> BuildProcessNameCandidates(string target)
+        {
+            List<string> candidates = new List<string>();
+            string value = (target ?? "").Trim().Trim('"');
+
+            AddProcessNameCandidate(candidates, AppWatchdog.NormalizeProcessName(value));
+
+            AppSearchCandidate installedApp = FindInstalledAppByTarget(value);
+            if (installedApp != null)
+            {
+                AddProcessNameCandidate(candidates, installedApp.Name);
+            }
+
+            if (IsShortcutPath(value))
+            {
+                ShortcutInfo shortcut = ReadShortcut(value);
+                if (shortcut != null)
+                {
+                    AddProcessNameCandidate(candidates, AppWatchdog.NormalizeProcessName(shortcut.TargetPath));
+                }
+            }
+
+            return candidates;
+        }
+
+        private static AppSearchCandidate FindInstalledAppByTarget(string target)
+        {
+            try
+            {
+                string value = (target ?? "").Trim();
+                if (!value.StartsWith(@"shell:AppsFolder\", StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+
+                return GetInstalledAppIndex(false)
+                    .FirstOrDefault(candidate => candidate != null
+                        && string.Equals(candidate.Target, value, StringComparison.OrdinalIgnoreCase));
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void AddProcessNameCandidate(List<string> candidates, string processName)
+        {
+            string value = (processName ?? "").Trim();
+            if (value.Length == 0)
+            {
+                return;
+            }
+            if (value.IndexOf(':') >= 0 || value.IndexOf('/') >= 0 || value.IndexOf('\\') >= 0)
+            {
+                return;
+            }
+            if (!candidates.Any(candidate => string.Equals(candidate, value, StringComparison.OrdinalIgnoreCase)))
+            {
+                candidates.Add(value);
+            }
         }
 
         public static List<AppSearchCandidate> FindInstalledApps(string query, int limit)
@@ -346,7 +459,7 @@ Get-StartApps | ForEach-Object {
 
         private static bool IsCommonSuggestion(string name)
         {
-            string[] preferred = { "ChatGPT", "Codex", "Claude", "Cursor", "Obsidian", "Docker", "Chrome", "Notepad", "PowerShell", "Visual Studio Code" };
+            string[] preferred = { "ChatGPT", "Claude", "Cursor", "Obsidian", "Docker", "Chrome", "Notepad", "PowerShell", "Visual Studio Code" };
             return preferred.Any(p => name.IndexOf(p, StringComparison.OrdinalIgnoreCase) >= 0);
         }
 

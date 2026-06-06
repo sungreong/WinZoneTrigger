@@ -519,45 +519,7 @@ namespace WinZoneTrigger
 
         public static bool ShouldRequireWindowByDefault(string processName, string launchTarget)
         {
-            string normalizedProcessName = NormalizeAppWatchName(processName);
-            string normalizedLaunchTarget = NormalizeAppWatchName(launchTarget);
-            return string.Equals(normalizedProcessName, "Codex", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(normalizedLaunchTarget, "Codex", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static string NormalizeAppWatchName(string value)
-        {
-            string name = (value ?? "").Trim().Trim('"');
-            if (name.Length == 0)
-            {
-                return "";
-            }
-
-            try
-            {
-                string fileName = Path.GetFileName(name);
-                if (!string.IsNullOrWhiteSpace(fileName))
-                {
-                    name = fileName;
-                }
-            }
-            catch
-            {
-            }
-
-            try
-            {
-                string extension = Path.GetExtension(name);
-                if (!string.IsNullOrWhiteSpace(extension))
-                {
-                    name = Path.GetFileNameWithoutExtension(name);
-                }
-            }
-            catch
-            {
-            }
-
-            return name.Trim();
+            return false;
         }
     }
 
