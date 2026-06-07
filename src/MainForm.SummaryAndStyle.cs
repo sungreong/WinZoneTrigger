@@ -76,40 +76,40 @@ namespace WinZoneTrigger
 
             FlowLayoutPanel buttons = new FlowLayoutPanel();
             buttons.Dock = DockStyle.Top;
-            buttons.AutoSize = false;
-            buttons.Height = 34;
-            buttons.WrapContents = false;
+            buttons.AutoSize = true;
+            buttons.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            buttons.WrapContents = true;
             buttons.FlowDirection = FlowDirection.LeftToRight;
             buttons.Margin = new Padding(0, 7, 0, 0);
             buttons.BackColor = UiSurfaceMuted;
 
             Button saveSelectedButton = CreateButton("저장");
-            SetFixedButtonSize(saveSelectedButton, 74, 30);
+            SetFixedButtonSize(saveSelectedButton, 82, 34);
             saveSelectedButton.Click += delegate { SaveFromUi(); };
             buttons.Controls.Add(saveSelectedButton);
 
             Button operateButton = CreateButton("운영하기");
-            SetFixedButtonSize(operateButton, 82, 30);
+            SetFixedButtonSize(operateButton, 100, 34);
             operateButton.Click += delegate { SetSelectedZoneOperating(true); };
             buttons.Controls.Add(operateButton);
 
             Button stopOperatingButton = CreateButton("운영 중지");
-            SetFixedButtonSize(stopOperatingButton, 82, 30);
+            SetFixedButtonSize(stopOperatingButton, 100, 34);
             stopOperatingButton.Click += delegate { SetSelectedZoneOperating(false); };
             buttons.Controls.Add(stopOperatingButton);
 
             Button testConditionButton = CreateButton("테스트해보기");
-            SetFixedButtonSize(testConditionButton, 94, 30);
+            SetFixedButtonSize(testConditionButton, 118, 34);
             testConditionButton.Click += delegate { TestSelectedZoneCondition(); };
             buttons.Controls.Add(testConditionButton);
 
             Button testActionsButton = CreateButton("동작 테스트");
-            SetFixedButtonSize(testActionsButton, 88, 30);
+            SetFixedButtonSize(testActionsButton, 110, 34);
             testActionsButton.Click += delegate { TestSelectedZoneActions(); };
             buttons.Controls.Add(testActionsButton);
 
             Button openConfigButton = CreateButton("설정 폴더");
-            SetFixedButtonSize(openConfigButton, 82, 30);
+            SetFixedButtonSize(openConfigButton, 100, 34);
             openConfigButton.Click += delegate { OpenConfigFolder(); };
             buttons.Controls.Add(openConfigButton);
 
@@ -458,10 +458,25 @@ namespace WinZoneTrigger
             }
 
             Size measured = TextRenderer.MeasureText(button.Text ?? "", button.Font ?? Font);
-            width = Math.Max(width, measured.Width + 34);
+            width = Math.Max(width, measured.Width + 48);
+            height = Math.Max(height, 34);
             button.AutoSize = false;
             button.Size = new Size(width, height);
             button.MinimumSize = new Size(width, height);
+        }
+
+        private void DockSidebarButton(Button button)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            button.Dock = DockStyle.Fill;
+            button.AutoSize = false;
+            button.MinimumSize = new Size(0, 36);
+            button.Height = 36;
+            button.Margin = new Padding(4, 4, 4, 4);
         }
 
         private ButtonTone ResolveButtonTone(string text)
@@ -503,6 +518,7 @@ namespace WinZoneTrigger
             listBox.IntegralHeight = false;
             listBox.DrawMode = DrawMode.Normal;
             listBox.BorderStyle = BorderStyle.FixedSingle;
+            listBox.HorizontalScrollbar = true;
             listBox.BackColor = UiSurface;
             listBox.ForeColor = UiText;
             listBox.SelectedIndexChanged += ZoneListSelectedIndexChanged;

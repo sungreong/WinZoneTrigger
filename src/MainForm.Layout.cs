@@ -68,14 +68,15 @@ namespace WinZoneTrigger
             settingsButton.Click += delegate { OpenSettingsDialog(); };
             topBar.Controls.Add(settingsButton);
 
-            SplitContainer split = new SplitContainer();
-            split.Dock = DockStyle.Fill;
-            split.BackColor = UiBorder;
-            split.FixedPanel = FixedPanel.Panel1;
-            split.Panel1MinSize = 300;
-            split.SplitterWidth = 5;
-            split.SplitterDistance = 320;
-            root.Controls.Add(split, 0, 1);
+            TableLayoutPanel contentGrid = new TableLayoutPanel();
+            contentGrid.Dock = DockStyle.Fill;
+            contentGrid.BackColor = UiBackground;
+            contentGrid.ColumnCount = 3;
+            contentGrid.RowCount = 1;
+            contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 360));
+            contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 5));
+            contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            root.Controls.Add(contentGrid, 0, 1);
 
             TableLayoutPanel left = new TableLayoutPanel();
             left.Dock = DockStyle.Fill;
@@ -86,7 +87,12 @@ namespace WinZoneTrigger
             left.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             left.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             left.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            split.Panel1.Controls.Add(left);
+            contentGrid.Controls.Add(left, 0, 0);
+
+            Panel divider = new Panel();
+            divider.Dock = DockStyle.Fill;
+            divider.BackColor = UiBorder;
+            contentGrid.Controls.Add(divider, 1, 0);
 
             Label zonesLabel = new Label();
             zonesLabel.Text = "등록된 위치";
@@ -101,7 +107,7 @@ namespace WinZoneTrigger
             _zoneTabs.Dock = DockStyle.Fill;
             _zoneTabs.Multiline = true;
             _zoneTabs.SizeMode = TabSizeMode.Fixed;
-            _zoneTabs.ItemSize = new Size(92, 28);
+            _zoneTabs.ItemSize = new Size(106, 30);
             left.Controls.Add(_zoneTabs, 0, 1);
 
             _allZonesTab = new TabPage("전체");
@@ -118,15 +124,20 @@ namespace WinZoneTrigger
             _activeZonesTab.Controls.Add(_activeZoneList);
             _inactiveZonesTab.Controls.Add(_inactiveZoneList);
 
-            FlowLayoutPanel zoneButtons = new FlowLayoutPanel();
-            zoneButtons.Dock = DockStyle.Fill;
+            TableLayoutPanel zoneButtons = new TableLayoutPanel();
+            zoneButtons.Dock = DockStyle.Top;
             zoneButtons.AutoSize = true;
-            zoneButtons.WrapContents = true;
+            zoneButtons.ColumnCount = 2;
+            zoneButtons.RowCount = 2;
+            zoneButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            zoneButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            zoneButtons.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            zoneButtons.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             zoneButtons.Margin = new Padding(0, 10, 0, 0);
             left.Controls.Add(zoneButtons, 0, 2);
 
             Button addZoneButton = CreateButton("새 위치");
-            SetFixedButtonSize(addZoneButton, 82, 32);
+            DockSidebarButton(addZoneButton);
             addZoneButton.Click += delegate
             {
                 CaptureCurrentZone();
@@ -135,29 +146,29 @@ namespace WinZoneTrigger
                 BindZoneList(zone.Id);
                 AppendLog("위치가 추가되었습니다: " + zone.Name);
             };
-            zoneButtons.Controls.Add(addZoneButton);
+            zoneButtons.Controls.Add(addZoneButton, 0, 0);
 
             Button currentZoneButton = CreateButton("현재 위치 등록");
-            SetFixedButtonSize(currentZoneButton, 120, 32);
+            DockSidebarButton(currentZoneButton);
             currentZoneButton.Click += delegate { CreateZoneFromCurrentLocation(); };
-            zoneButtons.Controls.Add(currentZoneButton);
+            zoneButtons.Controls.Add(currentZoneButton, 1, 0);
 
             Button duplicateZoneButton = CreateButton("복제");
-            SetFixedButtonSize(duplicateZoneButton, 74, 32);
+            DockSidebarButton(duplicateZoneButton);
             duplicateZoneButton.Click += delegate { DuplicateSelectedZone(); };
-            zoneButtons.Controls.Add(duplicateZoneButton);
+            zoneButtons.Controls.Add(duplicateZoneButton, 0, 1);
 
             Button removeZoneButton = CreateButton("삭제");
-            SetFixedButtonSize(removeZoneButton, 74, 32);
+            DockSidebarButton(removeZoneButton);
             removeZoneButton.Click += delegate { RemoveSelectedZone(); };
-            zoneButtons.Controls.Add(removeZoneButton);
+            zoneButtons.Controls.Add(removeZoneButton, 1, 1);
 
             Panel detailHost = new Panel();
             detailHost.Dock = DockStyle.Fill;
             detailHost.AutoScroll = false;
             detailHost.BackColor = UiSurface;
             detailHost.Padding = new Padding(10, 6, 10, 8);
-            split.Panel2.Controls.Add(detailHost);
+            contentGrid.Controls.Add(detailHost, 2, 0);
 
             TableLayoutPanel detailShell = new TableLayoutPanel();
             detailShell.Dock = DockStyle.Fill;
@@ -173,7 +184,7 @@ namespace WinZoneTrigger
             _detailTabs = new TabControl();
             _detailTabs.Dock = DockStyle.Fill;
             _detailTabs.SizeMode = TabSizeMode.Fixed;
-            _detailTabs.ItemSize = new Size(116, 30);
+            _detailTabs.ItemSize = new Size(128, 32);
             detailShell.Controls.Add(_detailTabs, 0, 1);
 
             _conditionTable = CreateDetailTable();
