@@ -81,9 +81,6 @@ namespace WinZoneTrigger
             split.Panel1MinSize = 300;
             split.SplitterWidth = 5;
             split.SplitterDistance = 320;
-            split.Resize += delegate { KeepDetailPaneReadable(split); };
-            split.SplitterMoved += delegate { KeepDetailPaneReadable(split); };
-            Load += delegate { KeepDetailPaneReadable(split); };
             root.Controls.Add(split, 0, 1);
 
             TableLayoutPanel left = new TableLayoutPanel();

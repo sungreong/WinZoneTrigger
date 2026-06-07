@@ -219,40 +219,6 @@ namespace WinZoneTrigger
             return url;
         }
 
-        private void KeepDetailPaneReadable(SplitContainer split)
-        {
-            const int preferredLeftWidth = 320;
-            const int minimumLeftWidth = 300;
-            const int minimumDetailWidth = 560;
-
-            if (split == null || split.Width <= 0)
-            {
-                return;
-            }
-
-            int availableWidth = split.Width - split.SplitterWidth;
-            int maxLeftWidth = availableWidth - minimumDetailWidth;
-            if (maxLeftWidth < minimumLeftWidth)
-            {
-                maxLeftWidth = Math.Max(minimumLeftWidth, availableWidth - 420);
-            }
-
-            int target = Math.Min(preferredLeftWidth, maxLeftWidth);
-            target = Math.Max(minimumLeftWidth, target);
-
-            if (split.Panel2.Width >= minimumDetailWidth &&
-                split.SplitterDistance >= minimumLeftWidth &&
-                split.SplitterDistance <= maxLeftWidth)
-            {
-                return;
-            }
-
-            if (split.SplitterDistance != target)
-            {
-                split.SplitterDistance = target;
-            }
-        }
-
         private void AddRow(string labelText, Control control)
         {
             AddRowTo(_conditionTable, labelText, control);

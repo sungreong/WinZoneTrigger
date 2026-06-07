@@ -58,25 +58,30 @@ namespace WinZoneTrigger
                 + " / args=" + FormatArguments(args)
                 + " / parents=" + ProcessDiagnostics.FormatParentChain(parentChain));
 
-            if (!TryAcquireSingleInstance())
-            {
-                return 0;
-            }
-
             try
             {
                 bool startMinimized = args != null && args.Any(a => string.Equals(a, "--minimized", StringComparison.OrdinalIgnoreCase));
                 bool startedFromWindowsStartup = args != null && args.Any(a => string.Equals(a, "--startup", StringComparison.OrdinalIgnoreCase));
                 if (startMinimized)
                 {
+                    if (!TryAcquireSingleInstance(@"Local\WinZoneTrigger.BackgroundInstance", "백그라운드"))
+                    {
+                        return 0;
+                    }
+
                     DiagnosticsLog.WriteEvent("최소화 시작: 백그라운드 자동 실행 컨텍스트를 사용합니다.");
                     Application.Run(new BackgroundAutomationContext());
                     return 0;
                 }
 
+                if (!TryAcquireSingleInstance(@"Local\WinZoneTrigger.SettingsInstance", "설정 화면"))
+                {
+                    return 0;
+                }
+
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                Application.Run(new MainForm(startMinimized, startedFromWindowsStartup));
+                Application.Run(new MainForm(startMinimized, startedFromWindowsStartup, false));
                 return 0;
             }
             finally
@@ -85,26 +90,26 @@ namespace WinZoneTrigger
             }
         }
 
-        private static bool TryAcquireSingleInstance()
+        private static bool TryAcquireSingleInstance(string mutexName, string instanceName)
         {
             try
             {
                 bool createdNew;
-                _singleInstanceMutex = new Mutex(true, @"Local\WinZoneTrigger.SingleInstance", out createdNew);
+                _singleInstanceMutex = new Mutex(true, mutexName, out createdNew);
                 if (createdNew)
                 {
-                    DiagnosticsLog.WriteEvent("단일 인스턴스 잠금 획득");
+                    DiagnosticsLog.WriteEvent(instanceName + " 단일 인스턴스 잠금 획득");
                     return true;
                 }
 
-                DiagnosticsLog.WriteEvent("기존 인스턴스 감지: 새 인스턴스를 종료합니다.");
+                DiagnosticsLog.WriteEvent("기존 " + instanceName + " 인스턴스 감지: 새 인스턴스를 종료합니다.");
                 _singleInstanceMutex.Dispose();
                 _singleInstanceMutex = null;
                 return false;
             }
             catch (Exception ex)
             {
-                DiagnosticsLog.Write("단일 인스턴스 잠금 실패", ex);
+                DiagnosticsLog.Write(instanceName + " 단일 인스턴스 잠금 실패", ex);
                 return true;
             }
         }

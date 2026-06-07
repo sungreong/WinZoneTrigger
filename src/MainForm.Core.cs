@@ -20,6 +20,7 @@ namespace WinZoneTrigger
     {
         private readonly bool _startMinimizedRequested;
         private readonly bool _startedFromWindowsStartup;
+        private readonly bool _automationEnabled;
         private readonly Dictionary<string, bool> _insideZones;
         private readonly Dictionary<string, DateTime> _lastAppWatchChecks;
         private readonly Dictionary<string, string> _lastAppWatchStatusTexts;
@@ -122,10 +123,11 @@ namespace WinZoneTrigger
             Danger
         }
 
-        public MainForm(bool startMinimizedRequested, bool startedFromWindowsStartup)
+        public MainForm(bool startMinimizedRequested, bool startedFromWindowsStartup, bool automationEnabled)
         {
             _startMinimizedRequested = startMinimizedRequested;
             _startedFromWindowsStartup = startedFromWindowsStartup;
+            _automationEnabled = automationEnabled;
             _insideZones = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
             _lastAppWatchChecks = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
             _lastAppWatchStatusTexts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

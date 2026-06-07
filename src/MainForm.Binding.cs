@@ -770,6 +770,11 @@ namespace WinZoneTrigger
 
             _scanTimer.Stop();
             _scanTimer.Tick -= ScanTimerTick;
+            if (!_automationEnabled)
+            {
+                return;
+            }
+
             _scanTimer.Interval = Math.Max(5, GetShortestConditionScanIntervalSeconds()) * 1000;
             _scanTimer.Tick += ScanTimerTick;
             if (HasZoneConditionScanZones())
@@ -788,6 +793,12 @@ namespace WinZoneTrigger
             _appWatchRunVersion++;
             _appWatchTimer.Stop();
             _appWatchTimerStartedAtLocal = null;
+            if (!_automationEnabled)
+            {
+                RefreshSelectedAppWatchStatusLabel();
+                return;
+            }
+
             if (HasAppWatchZones())
             {
                 _appWatchTimer.Interval = GetShortestAppWatchIntervalMilliseconds();

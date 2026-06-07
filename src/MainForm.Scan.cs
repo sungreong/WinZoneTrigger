@@ -803,6 +803,12 @@ namespace WinZoneTrigger
         {
             base.OnShown(e);
 
+            if (!_automationEnabled)
+            {
+                AppendLog("설정 화면 모드: 자동 실행은 백그라운드 프로세스에서 처리합니다.");
+                return;
+            }
+
             if (_startMinimizedRequested)
             {
                 WindowState = FormWindowState.Minimized;
