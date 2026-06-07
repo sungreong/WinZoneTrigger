@@ -46,6 +46,17 @@ namespace WinZoneTrigger
 
     internal static class AppWatchdog
     {
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
         public static string InferProcessName(string target)
         {
             return NormalizeProcessName(target);
@@ -152,18 +163,20 @@ namespace WinZoneTrigger
             {
                 int count = processes == null ? 0 : processes.Length;
                 bool isRunning = count > 0;
+                WindowSnapshot windows = GetProcessWindows(processes);
+                bool hasVisibleWindow = windows.VisibleWindowCount > 0;
                 AppWatchCheckResult result = new AppWatchCheckResult
                 {
                     ProcessName = normalized,
                     ProcessCount = count,
-                    MainWindowCount = 0,
-                    VisibleWindowCount = 0,
+                    MainWindowCount = windows.MainWindowCount,
+                    VisibleWindowCount = windows.VisibleWindowCount,
                     IsRunning = isRunning,
-                    RequiresVisibleWindow = false,
-                    HasVisibleWindow = isRunning,
-                    MeetsRequirement = isRunning,
+                    RequiresVisibleWindow = requireVisibleWindow,
+                    HasVisibleWindow = hasVisibleWindow,
+                    MeetsRequirement = isRunning && (!requireVisibleWindow || hasVisibleWindow),
                     LaunchAttempted = false,
-                    WindowHandle = IntPtr.Zero
+                    WindowHandle = windows.FirstVisibleWindow
                 };
                 result.Summary = BuildCheckSummary(result);
                 return result;
@@ -182,7 +195,7 @@ namespace WinZoneTrigger
 
         public static AppWatchCheckResult EnsureRunning(string processName, string launchTarget, bool requireVisibleWindow, Action<string> log)
         {
-            AppWatchCheckResult current = Check(processName, false);
+            AppWatchCheckResult current = Check(processName, requireVisibleWindow);
             if (current.MeetsRequirement)
             {
                 return current;
@@ -200,11 +213,81 @@ namespace WinZoneTrigger
             }
 
             AppLauncher.LaunchApp(target, log ?? delegate { });
-            AppWatchCheckResult afterLaunch = WaitForRequirement(processName, false);
+            AppWatchCheckResult afterLaunch = WaitForRequirement(processName, requireVisibleWindow);
 
             afterLaunch.LaunchAttempted = true;
             afterLaunch.Summary = BuildLaunchSummary(afterLaunch);
             return afterLaunch;
+        }
+
+        private sealed class WindowSnapshot
+        {
+            public int MainWindowCount { get; set; }
+            public int VisibleWindowCount { get; set; }
+            public IntPtr FirstVisibleWindow { get; set; }
+        }
+
+        private static WindowSnapshot GetProcessWindows(Process[] processes)
+        {
+            WindowSnapshot snapshot = new WindowSnapshot();
+            if (processes == null || processes.Length == 0)
+            {
+                return snapshot;
+            }
+
+            HashSet<int> processIds = new HashSet<int>();
+            HashSet<IntPtr> windows = new HashSet<IntPtr>();
+            foreach (Process process in processes)
+            {
+                if (process == null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    processIds.Add(process.Id);
+                    if (process.MainWindowHandle != IntPtr.Zero && windows.Add(process.MainWindowHandle))
+                    {
+                        snapshot.MainWindowCount++;
+                        if (IsWindowVisible(process.MainWindowHandle))
+                        {
+                            snapshot.VisibleWindowCount++;
+                            if (snapshot.FirstVisibleWindow == IntPtr.Zero)
+                            {
+                                snapshot.FirstVisibleWindow = process.MainWindowHandle;
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            EnumWindows(delegate(IntPtr hWnd, IntPtr lParam)
+            {
+                uint processId;
+                GetWindowThreadProcessId(hWnd, out processId);
+                if (!processIds.Contains(unchecked((int)processId)) || !windows.Add(hWnd))
+                {
+                    return true;
+                }
+
+                snapshot.MainWindowCount++;
+                if (IsWindowVisible(hWnd))
+                {
+                    snapshot.VisibleWindowCount++;
+                    if (snapshot.FirstVisibleWindow == IntPtr.Zero)
+                    {
+                        snapshot.FirstVisibleWindow = hWnd;
+                    }
+                }
+
+                return true;
+            }, IntPtr.Zero);
+
+            return snapshot;
         }
 
         private static AppWatchCheckResult WaitForRequirement(string processName, bool requireVisibleWindow)
