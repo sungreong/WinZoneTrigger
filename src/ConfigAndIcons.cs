@@ -69,27 +69,14 @@ namespace WinZoneTrigger
     {
         public static Icon GetAppIcon()
         {
-            Icon extracted = null;
             try
             {
-                extracted = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-                if (extracted != null)
-                {
-                    return (Icon)extracted.Clone();
-                }
+                return (Icon)SystemIcons.Application.Clone();
             }
             catch
             {
+                return null;
             }
-            finally
-            {
-                if (extracted != null)
-                {
-                    extracted.Dispose();
-                }
-            }
-
-            return (Icon)SystemIcons.Application.Clone();
         }
 
         public static void DisposeIcon(Form form)

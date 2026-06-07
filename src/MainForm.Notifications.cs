@@ -20,35 +20,7 @@ namespace WinZoneTrigger
     {
         private void ShowTrayNotification(string title, string message)
         {
-            if (IsShuttingDown())
-            {
-                return;
-            }
-
-            if (InvokeRequired)
-            {
-                try
-                {
-                    BeginInvoke(new Action<string, string>(ShowTrayNotification), title, message);
-                }
-                catch
-                {
-                }
-                return;
-            }
-
-            if (_trayIcon == null || !_trayIcon.Visible)
-            {
-                return;
-            }
-
-            try
-            {
-                _trayIcon.ShowBalloonTip(2500, title, message, ToolTipIcon.Info);
-            }
-            catch
-            {
-            }
+            DiagnosticsLog.WriteEvent("트레이 알림 생략: " + (title ?? "") + " / " + (message ?? ""));
         }
 
         private static string BuildLaunchNotificationText(string target)
