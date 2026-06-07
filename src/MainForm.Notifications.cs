@@ -201,7 +201,7 @@ namespace WinZoneTrigger
             }
 
             List<string> apps = GetAppLaunches();
-            _appLaunchChipsPanel.Controls.Clear();
+            ClearChildControls(_appLaunchChipsPanel);
             if (apps.Count == 0)
             {
                 _selectedAppLaunch = null;

@@ -770,6 +770,19 @@ namespace WinZoneTrigger
                 _trayIcon = null;
             }
 
+            if (_toolTip != null)
+            {
+                try
+                {
+                    _toolTip.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticsLog.Write("툴팁 정리 실패", ex);
+                }
+                _toolTip = null;
+            }
+
             try
             {
                 AppIcons.DisposeIcon(this);

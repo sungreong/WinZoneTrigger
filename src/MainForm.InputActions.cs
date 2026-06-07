@@ -30,7 +30,7 @@ namespace WinZoneTrigger
                 .ThenBy(n => n.Ssid)
                 .ToList();
 
-            _wifiChoicesPanel.Controls.Clear();
+            ClearChildControls(_wifiChoicesPanel);
 
             foreach (WifiNetwork network in visible)
             {
@@ -117,7 +117,7 @@ namespace WinZoneTrigger
                 .ThenBy(n => n.Ssid)
                 .ToList();
 
-            _connectWifiChoicesPanel.Controls.Clear();
+            ClearChildControls(_connectWifiChoicesPanel);
             string selected = string.IsNullOrWhiteSpace(_connectSsidText.Text) ? _connectProfileText.Text : _connectSsidText.Text;
 
             foreach (WifiNetwork network in visible)
@@ -254,7 +254,7 @@ namespace WinZoneTrigger
 
         private void SetChromeUrls(IEnumerable<string> urls)
         {
-            _chromeUrlChipsPanel.Controls.Clear();
+            ClearChildControls(_chromeUrlChipsPanel);
             _selectedChromeUrl = null;
             foreach (string url in (urls ?? new List<string>()).Where(u => !string.IsNullOrWhiteSpace(u) && !ActionValueCleaner.IsAudioStatusValue(u)))
             {
@@ -324,7 +324,7 @@ namespace WinZoneTrigger
             }
 
             List<string> urls = GetChromeUrls();
-            _chromeUrlChipsPanel.Controls.Clear();
+            ClearChildControls(_chromeUrlChipsPanel);
             if (urls.Count == 0)
             {
                 _selectedChromeUrl = null;
@@ -389,7 +389,7 @@ namespace WinZoneTrigger
                 return;
             }
 
-            _appSearchResultsPanel.Controls.Clear();
+            ClearChildControls(_appSearchResultsPanel);
             string term = (query ?? "").Trim();
             if (term.Length < 2)
             {
@@ -473,7 +473,7 @@ namespace WinZoneTrigger
 
         private void SetAppLaunches(IEnumerable<string> apps)
         {
-            _appLaunchChipsPanel.Controls.Clear();
+            ClearChildControls(_appLaunchChipsPanel);
             _selectedAppLaunch = null;
             foreach (string app in (apps ?? new List<string>()).Where(a => !string.IsNullOrWhiteSpace(a) && !ActionValueCleaner.IsAudioStatusValue(a)))
             {

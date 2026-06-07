@@ -318,7 +318,7 @@ namespace WinZoneTrigger
                 return;
             }
 
-            _appWatchItemsPanel.Controls.Clear();
+            ClearChildControls(_appWatchItemsPanel);
             ZoneRule zone = GetSelectedZone();
             if (zone == null)
             {

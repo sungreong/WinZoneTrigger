@@ -99,6 +99,7 @@ internal static class InstallerProgram
         private readonly Button _installButton;
         private readonly Button _uninstallButton;
         private readonly Button _closeButton;
+        private readonly PictureBox _iconBox;
 
         public InstallerForm()
         {
@@ -112,10 +113,24 @@ internal static class InstallerProgram
             ForeColor = UiText;
             Font = new Font("Malgun Gothic", 9.25F);
 
-            Icon extractedIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-            if (extractedIcon != null)
+            Icon extractedIcon = null;
+            try
             {
-                Icon = extractedIcon;
+                extractedIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+                if (extractedIcon != null)
+                {
+                    Icon = (Icon)extractedIcon.Clone();
+                }
+            }
+            catch
+            {
+            }
+            finally
+            {
+                if (extractedIcon != null)
+                {
+                    extractedIcon.Dispose();
+                }
             }
 
             Panel header = new Panel
@@ -126,7 +141,7 @@ internal static class InstallerProgram
             };
             Controls.Add(header);
 
-            PictureBox iconBox = new PictureBox
+            _iconBox = new PictureBox
             {
                 Location = new Point(24, 24),
                 Size = new Size(42, 42),
@@ -134,9 +149,9 @@ internal static class InstallerProgram
             };
             if (Icon != null)
             {
-                iconBox.Image = Icon.ToBitmap();
+                _iconBox.Image = Icon.ToBitmap();
             }
-            header.Controls.Add(iconBox);
+            header.Controls.Add(_iconBox);
 
             Label title = new Label
             {
@@ -188,7 +203,7 @@ internal static class InstallerProgram
                 Checked = true,
                 AutoSize = true,
                 FlatStyle = FlatStyle.Flat,
-                BackColor = Color.Transparent,
+                BackColor = UiBackground,
                 ForeColor = UiText,
                 Location = new Point(122, 164)
             };
@@ -200,7 +215,7 @@ internal static class InstallerProgram
                 Checked = true,
                 AutoSize = true,
                 FlatStyle = FlatStyle.Flat,
-                BackColor = Color.Transparent,
+                BackColor = UiBackground,
                 ForeColor = UiText,
                 Location = new Point(122, 194)
             };
@@ -253,6 +268,25 @@ internal static class InstallerProgram
             AcceptButton = _installButton;
             CancelButton = _closeButton;
             Log("설치 준비가 완료되었습니다.");
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            if (_iconBox != null && _iconBox.Image != null)
+            {
+                Image image = _iconBox.Image;
+                _iconBox.Image = null;
+                image.Dispose();
+            }
+
+            if (Icon != null)
+            {
+                Icon icon = Icon;
+                Icon = null;
+                icon.Dispose();
+            }
+
+            base.OnFormClosed(e);
         }
 
         private void StyleButton(Button button, bool primary)

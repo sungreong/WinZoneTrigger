@@ -518,6 +518,21 @@ namespace WinZoneTrigger
             return listBox;
         }
 
+        private static void ClearChildControls(Control parent)
+        {
+            if (parent == null || parent.Controls.Count == 0)
+            {
+                return;
+            }
+
+            Control[] children = parent.Controls.Cast<Control>().ToArray();
+            parent.Controls.Clear();
+            foreach (Control child in children)
+            {
+                child.Dispose();
+            }
+        }
+
         private Label CreateInlineLabel(string text)
         {
             Label label = new Label();
