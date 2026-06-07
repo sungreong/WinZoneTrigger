@@ -319,8 +319,7 @@ namespace WinZoneTrigger
                         }
 
                         AppendLog(reason + " 결과(" + zoneResult.ZoneName + " · " + zoneResult.ItemName + "): " + displaySummary);
-                        if (updateUi
-                            && string.Equals(_currentZoneId, zoneResult.ZoneId, StringComparison.OrdinalIgnoreCase)
+                        if (string.Equals(_currentZoneId, zoneResult.ZoneId, StringComparison.OrdinalIgnoreCase)
                             && string.Equals(_selectedAppWatchItemId, zoneResult.ItemId, StringComparison.OrdinalIgnoreCase))
                         {
                             UpdateAppWatchStatusLabel(displaySummary);
