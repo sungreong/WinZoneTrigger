@@ -237,22 +237,19 @@ namespace WinZoneTrigger
             try
             {
                 int count = processes == null ? 0 : processes.Length;
-                WindowScanResult windowScan = FindTopLevelWindows(processes);
-
                 bool isRunning = count > 0;
-                bool hasVisibleWindow = windowScan.VisibleWindowCount > 0;
                 AppWatchCheckResult result = new AppWatchCheckResult
                 {
                     ProcessName = normalized,
                     ProcessCount = count,
-                    MainWindowCount = windowScan.WindowCount,
-                    VisibleWindowCount = windowScan.VisibleWindowCount,
+                    MainWindowCount = 0,
+                    VisibleWindowCount = 0,
                     IsRunning = isRunning,
-                    RequiresVisibleWindow = requireVisibleWindow,
-                    HasVisibleWindow = hasVisibleWindow,
-                    MeetsRequirement = isRunning && (!requireVisibleWindow || hasVisibleWindow),
+                    RequiresVisibleWindow = false,
+                    HasVisibleWindow = isRunning,
+                    MeetsRequirement = isRunning,
                     LaunchAttempted = false,
-                    WindowHandle = windowScan.VisibleWindowHandle == IntPtr.Zero ? windowScan.WindowHandle : windowScan.VisibleWindowHandle
+                    WindowHandle = IntPtr.Zero
                 };
                 result.Summary = BuildCheckSummary(result);
                 return result;
@@ -271,7 +268,7 @@ namespace WinZoneTrigger
 
         public static AppWatchCheckResult EnsureRunning(string processName, string launchTarget, bool requireVisibleWindow, Action<string> log)
         {
-            AppWatchCheckResult current = Check(processName, requireVisibleWindow);
+            AppWatchCheckResult current = Check(processName, false);
             if (current.MeetsRequirement)
             {
                 return current;
@@ -285,25 +282,13 @@ namespace WinZoneTrigger
 
             if (log != null)
             {
-                if (current.IsRunning && requireVisibleWindow)
-                {
-                    log("앱 감시: 프로세스는 있지만 표시 창이 없어 다시 열기를 요청합니다: " + current.ProcessName);
-                }
-                else
-                {
-                    log("앱 감시: 꺼진 상태라 다시 실행합니다: " + current.ProcessName);
-                }
+                log("앱 감시: 꺼진 상태라 다시 실행합니다: " + current.ProcessName);
             }
 
             AppLauncher.LaunchApp(target, log ?? delegate { });
-            AppWatchCheckResult afterLaunch = WaitForRequirement(processName, requireVisibleWindow);
+            AppWatchCheckResult afterLaunch = WaitForRequirement(processName, false);
 
             afterLaunch.LaunchAttempted = true;
-            if (requireVisibleWindow && afterLaunch.HasVisibleWindow)
-            {
-                TryBringWindowToFront(afterLaunch.WindowHandle);
-            }
-
             afterLaunch.Summary = BuildLaunchSummary(afterLaunch);
             return afterLaunch;
         }

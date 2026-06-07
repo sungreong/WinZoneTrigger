@@ -27,11 +27,7 @@ namespace WinZoneTrigger
             BackColor = UiBackground;
             ForeColor = UiText;
             Font = new Font("Malgun Gothic", 9.25F, FontStyle.Regular, GraphicsUnit.Point);
-            Icon = AppIcons.GetAppIcon();
-            _toolTip = new ToolTip();
-            _toolTip.AutoPopDelay = 12000;
-            _toolTip.InitialDelay = 400;
-            _toolTip.ReshowDelay = 100;
+            _toolTip = null;
 
             TableLayoutPanel root = new TableLayoutPanel();
             root.Dock = DockStyle.Fill;
@@ -69,7 +65,7 @@ namespace WinZoneTrigger
             topBar.Controls.Add(_startupCheck);
 
             _startMinimizedCheck = new CheckBox();
-            _startMinimizedCheck.Text = "트레이로 시작";
+            _startMinimizedCheck.Text = "최소화로 시작";
             _startMinimizedCheck.AutoSize = true;
             _startMinimizedCheck.Margin = new Padding(4, 8, 14, 4);
             topBar.Controls.Add(_startMinimizedCheck);

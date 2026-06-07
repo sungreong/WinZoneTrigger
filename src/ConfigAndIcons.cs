@@ -65,42 +65,4 @@ namespace WinZoneTrigger
         }
     }
 
-    internal static class AppIcons
-    {
-        public static Icon GetAppIcon()
-        {
-            try
-            {
-                return (Icon)SystemIcons.Application.Clone();
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        public static void DisposeIcon(Form form)
-        {
-            if (form == null || form.Icon == null)
-            {
-                return;
-            }
-
-            Icon icon = form.Icon;
-            form.Icon = null;
-            icon.Dispose();
-        }
-
-        public static void DisposeIcon(NotifyIcon notifyIcon)
-        {
-            if (notifyIcon == null || notifyIcon.Icon == null)
-            {
-                return;
-            }
-
-            Icon icon = notifyIcon.Icon;
-            notifyIcon.Icon = null;
-            icon.Dispose();
-        }
-    }
 }

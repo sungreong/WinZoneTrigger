@@ -20,23 +20,7 @@ namespace WinZoneTrigger
     {
         private void ConfigureTray()
         {
-            ContextMenuStrip menu = new ContextMenuStrip();
-            menu.Items.Add("열기", null, delegate { ShowMainWindow(); });
-            menu.Items.Add("테스트해보기", null, delegate { TestSelectedZoneCondition(); });
-            menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add("종료", null, delegate
-            {
-                DiagnosticsLog.WriteEvent("트레이 종료 메뉴 클릭");
-                _allowExit = true;
-                Close();
-            });
-
-            _trayIcon = new NotifyIcon();
-            _trayIcon.Icon = AppIcons.GetAppIcon();
-            _trayIcon.Text = "위치 자동 실행";
-            _trayIcon.Visible = true;
-            _trayIcon.ContextMenuStrip = menu;
-            _trayIcon.DoubleClick += delegate { ShowMainWindow(); };
+            DiagnosticsLog.WriteEvent("트레이 비활성화: 안정성을 위해 작업표시줄 최소화 방식으로 실행합니다.");
         }
 
         private void BindConfigToControls()

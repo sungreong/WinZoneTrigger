@@ -28,7 +28,6 @@ namespace WinZoneTrigger
         private readonly System.Windows.Forms.Timer _appWatchTimer;
         private AppConfig _config;
         private bool _loadingSelection;
-        private bool _allowExit;
         private bool _isExiting;
         private bool _scanInProgress;
         private bool _appWatchInProgress;
@@ -40,7 +39,6 @@ namespace WinZoneTrigger
         private DateTime? _appWatchTimerStartedAtLocal;
         private string _currentZoneId;
 
-        private NotifyIcon _trayIcon;
         private TabControl _zoneTabs;
         private TabPage _allZonesTab;
         private TabPage _activeZonesTab;

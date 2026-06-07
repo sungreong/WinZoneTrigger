@@ -126,6 +126,7 @@ namespace WinZoneTrigger
             }
 
             _scanInProgress = true;
+            bool updateUi = forceScan;
             AppendLog(startupOnly
                 ? "시작 시 1회 실행 조건을 확인하는 중입니다..."
                 : forceScan ? "Wi-Fi와 위치를 확인하는 중입니다..." : "위치 조건을 확인하는 중입니다...");
@@ -154,7 +155,7 @@ namespace WinZoneTrigger
                         return;
                     }
 
-                    ProcessScanResult(task.Result, startupOnly);
+                    ProcessScanResult(task.Result, startupOnly, updateUi);
                 }
                 catch (Exception ex)
                 {
@@ -257,7 +258,7 @@ namespace WinZoneTrigger
                     return;
                 }
 
-                ScanContext context = UpdateScanStatus(task.Result);
+                ScanContext context = UpdateScanStatus(task.Result, true);
                 bool matches = ZoneMatches(snapshotZone, context.VisibleSsids, context.CurrentLocation);
                 _activeZonesLabel.Text = matches ? snapshotZone.Name : "없음";
                 UpdateSelectedZoneSummary();
@@ -321,26 +322,86 @@ namespace WinZoneTrigger
 
         private ScanSnapshot CreateScanSnapshot(bool forceScan, bool requestLocation)
         {
-            ScanSnapshot snapshot = new ScanSnapshot();
+            ScanSnapshot helperSnapshot = RunScanHelper(forceScan, requestLocation);
+            if (helperSnapshot != null)
+            {
+                return helperSnapshot;
+            }
 
+            return new ScanSnapshot
+            {
+                Networks = new List<WifiNetwork>(),
+                WifiError = "탐지 헬퍼 실행에 실패했습니다.",
+                LocationResult = requestLocation
+                    ? new LocationReadResult { WasRequested = true, Error = "탐지 헬퍼 실행에 실패했습니다." }
+                    : LocationReadResult.NotRequested()
+            };
+        }
+
+        private ScanSnapshot RunScanHelper(bool forceScan, bool requestLocation)
+        {
+            string outputPath = Path.Combine(Path.GetTempPath(), "WinZoneTrigger.scan." + Guid.NewGuid().ToString("N") + ".json");
             try
             {
-                snapshot.Networks = WifiLocator.GetVisibleNetworks(forceScan);
+                string arguments = "--scan-helper --out " + QuoteCommandArgument(outputPath);
+                if (forceScan)
+                {
+                    arguments += " --force";
+                }
+                if (requestLocation)
+                {
+                    arguments += " --location";
+                }
+
+                CommandResult command = CommandRunner.Run(Application.ExecutablePath, arguments, requestLocation ? 45000 : 20000);
+                if (command.TimedOut)
+                {
+                    DiagnosticsLog.WriteEvent("탐지 헬퍼 시간 초과: location=" + requestLocation);
+                    return null;
+                }
+
+                if (!File.Exists(outputPath))
+                {
+                    DiagnosticsLog.WriteEvent("탐지 헬퍼 결과 없음: exit=" + command.ExitCode + " / error=" + FirstLogLine(command.Error));
+                    return null;
+                }
+
+                string json = File.ReadAllText(outputPath, Encoding.UTF8);
+                ScanSnapshot snapshot = new JavaScriptSerializer().Deserialize<ScanSnapshot>(json);
+                if (snapshot == null)
+                {
+                    DiagnosticsLog.WriteEvent("탐지 헬퍼 결과 해석 실패: 빈 결과");
+                    return null;
+                }
+
+                if (command.ExitCode != 0)
+                {
+                    DiagnosticsLog.WriteEvent("탐지 헬퍼 비정상 종료: exit=" + command.ExitCode + " / wifiError=" + FirstLogLine(snapshot.WifiError));
+                }
+
+                return snapshot;
             }
             catch (Exception ex)
             {
-                snapshot.Networks = new List<WifiNetwork>();
-                snapshot.WifiError = ex.Message;
+                DiagnosticsLog.Write("탐지 헬퍼 처리 실패", ex);
+                return null;
             }
-
-            snapshot.LocationResult = requestLocation
-                ? LocationLocator.GetCurrentLocation()
-                : LocationReadResult.NotRequested();
-
-            return snapshot;
+            finally
+            {
+                try
+                {
+                    if (File.Exists(outputPath))
+                    {
+                        File.Delete(outputPath);
+                    }
+                }
+                catch
+                {
+                }
+            }
         }
 
-        private ScanContext UpdateScanStatus(ScanSnapshot snapshot)
+        private ScanContext UpdateScanStatus(ScanSnapshot snapshot, bool updateUi)
         {
             List<WifiNetwork> networks = snapshot.Networks ?? new List<WifiNetwork>();
             List<WifiNetwork> ordered = networks
@@ -354,34 +415,43 @@ namespace WinZoneTrigger
                 AppendLog("Wi-Fi 확인 실패: " + snapshot.WifiError);
             }
 
-            if (ordered.Count == 0)
+            if (updateUi && ordered.Count == 0)
             {
                 _visibleNetworksLabel.Text = "보이는 Wi-Fi가 없습니다.";
             }
-            else
+            else if (updateUi)
             {
                 _visibleNetworksLabel.Text = string.Join(", ", ordered.Take(12).Select(n => n.Ssid + " " + n.SignalQuality + "%").ToArray());
             }
 
             _lastVisibleNetworks = ordered;
-            ZoneRule selectedZone = GetSelectedZone();
-            IEnumerable<string> selectedWifi = selectedZone == null ? GetSelectedWifiSsids() : selectedZone.NearbySsids;
-            RenderWifiChoiceButtons(selectedWifi, _lastVisibleNetworks);
-            RenderConnectWifiTargetButtons(_lastVisibleNetworks);
+            if (updateUi)
+            {
+                ZoneRule selectedZone = GetSelectedZone();
+                IEnumerable<string> selectedWifi = selectedZone == null ? GetSelectedWifiSsids() : selectedZone.NearbySsids;
+                RenderWifiChoiceButtons(selectedWifi, _lastVisibleNetworks);
+                RenderConnectWifiTargetButtons(_lastVisibleNetworks);
+            }
 
             HashSet<string> visibleSsids = new HashSet<string>(ordered.Select(n => n.Ssid), StringComparer.OrdinalIgnoreCase);
             LocationInfo currentLocation = null;
             if (snapshot.LocationResult != null && snapshot.LocationResult.HasLocation)
             {
                 currentLocation = snapshot.LocationResult.Location;
-                _currentLocationLabel.Text = FormatLocation(currentLocation);
+                if (updateUi)
+                {
+                    _currentLocationLabel.Text = FormatLocation(currentLocation);
+                }
             }
             else if (snapshot.LocationResult != null && snapshot.LocationResult.WasRequested)
             {
-                _currentLocationLabel.Text = "사용 불가: " + snapshot.LocationResult.Error;
+                if (updateUi)
+                {
+                    _currentLocationLabel.Text = "사용 불가: " + snapshot.LocationResult.Error;
+                }
                 AppendLog("위치 사용 불가: " + snapshot.LocationResult.Error);
             }
-            else
+            else if (updateUi)
             {
                 _currentLocationLabel.Text = "좌표 감지 위치가 켜져 있지 않습니다.";
             }
@@ -394,9 +464,9 @@ namespace WinZoneTrigger
             };
         }
 
-        private void ProcessScanResult(ScanSnapshot snapshot, bool startupOnly)
+        private void ProcessScanResult(ScanSnapshot snapshot, bool startupOnly, bool updateUi)
         {
-            ScanContext context = UpdateScanStatus(snapshot);
+            ScanContext context = UpdateScanStatus(snapshot, updateUi);
             HashSet<string> visibleSsids = context.VisibleSsids;
             LocationInfo currentLocation = context.CurrentLocation;
 
@@ -444,25 +514,31 @@ namespace WinZoneTrigger
                 }
             }
 
-            _activeZonesLabel.Text = activeZoneNames.Count == 0
-                ? "없음"
-                : string.Join(", ", activeZoneNames.ToArray());
+            if (updateUi)
+            {
+                _activeZonesLabel.Text = activeZoneNames.Count == 0
+                    ? "없음"
+                    : string.Join(", ", activeZoneNames.ToArray());
+            }
             if (startupOnly)
             {
                 _lastScanHadActiveZone = hadEligibleActiveZone;
             }
 
-            if (zoneStateChanged)
+            if (updateUi)
             {
-                BindZoneList(_currentZoneId);
-            }
-            else
-            {
-                InvalidateZoneLists();
-            }
+                if (zoneStateChanged)
+                {
+                    BindZoneList(_currentZoneId);
+                }
+                else
+                {
+                    InvalidateZoneLists();
+                }
 
-            UpdateSelectedZoneSummary();
-            RefreshSelectedAppWatchStatusLabel();
+                UpdateSelectedZoneSummary();
+                RefreshSelectedAppWatchStatusLabel();
+            }
 
             if (appWatchZoneBecameActive)
             {
@@ -573,27 +649,6 @@ namespace WinZoneTrigger
             {
                 return;
             }
-
-            string line = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + message + Environment.NewLine;
-            if (_recentLogLabel != null && !_recentLogLabel.IsDisposed)
-            {
-                _recentLogLabel.Text = message;
-            }
-
-            if (_logText == null || _logText.IsDisposed)
-            {
-                return;
-            }
-
-            _logText.AppendText(line);
-
-            if (_logText.TextLength > 80000)
-            {
-                string trimmed = _logText.Text.Substring(_logText.TextLength - 50000);
-                _logText.Text = trimmed;
-                _logText.SelectionStart = _logText.TextLength;
-                _logText.ScrollToCaret();
-            }
         }
 
         private static List<string> SplitLines(string text)
@@ -618,6 +673,25 @@ namespace WinZoneTrigger
             }
 
             return string.Join(Environment.NewLine, values.Where(s => !string.IsNullOrWhiteSpace(s)).ToArray());
+        }
+
+        private static string QuoteCommandArgument(string value)
+        {
+            return "\"" + (value ?? "").Replace("\"", "\\\"") + "\"";
+        }
+
+        private static string FirstLogLine(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return "";
+            }
+
+            string line = text.Replace("\r", "\n")
+                .Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim())
+                .FirstOrDefault(s => s.Length > 0) ?? "";
+            return line.Length > 180 ? line.Substring(0, 180) : line;
         }
 
         private static double ParseCoordinate(string text, double fallback)
@@ -713,7 +787,8 @@ namespace WinZoneTrigger
 
             if (_startMinimizedRequested)
             {
-                Hide();
+                WindowState = FormWindowState.Minimized;
+                ShowInTaskbar = true;
             }
 
             if (_startedFromWindowsStartup && HasStartupRunOnceZones())
@@ -740,57 +815,12 @@ namespace WinZoneTrigger
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            DiagnosticsLog.WriteEvent("폼 종료 요청: reason=" + e.CloseReason + " / allowExit=" + _allowExit + " / exiting=" + _isExiting);
-            if (!_allowExit && e.CloseReason == CloseReason.UserClosing)
-            {
-                e.Cancel = true;
-                Hide();
-                ShowTrayNotification("위치 자동 실행", "트레이에서 계속 실행 중입니다.");
-                return;
-            }
-
+            DiagnosticsLog.WriteEvent("폼 종료 요청: reason=" + e.CloseReason + " / exiting=" + _isExiting);
             _isExiting = true;
             _appWatchRunVersion++;
             _scanTimer.Stop();
             _startupRetryTimer.Stop();
             _appWatchTimer.Stop();
-
-            if (_trayIcon != null)
-            {
-                try
-                {
-                    _trayIcon.Visible = false;
-                    AppIcons.DisposeIcon(_trayIcon);
-                    _trayIcon.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    DiagnosticsLog.Write("트레이 아이콘 정리 실패", ex);
-                }
-                _trayIcon = null;
-            }
-
-            if (_toolTip != null)
-            {
-                try
-                {
-                    _toolTip.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    DiagnosticsLog.Write("툴팁 정리 실패", ex);
-                }
-                _toolTip = null;
-            }
-
-            try
-            {
-                AppIcons.DisposeIcon(this);
-            }
-            catch (Exception ex)
-            {
-                DiagnosticsLog.Write("폼 아이콘 정리 실패", ex);
-            }
 
             base.OnFormClosing(e);
         }

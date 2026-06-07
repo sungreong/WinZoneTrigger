@@ -21,8 +21,13 @@ namespace WinZoneTrigger
         private static Mutex _singleInstanceMutex;
 
         [STAThread]
-        private static void Main(string[] args)
+        private static int Main(string[] args)
         {
+            if (HasArgument(args, "--scan-helper"))
+            {
+                return ScanHelper.Run(args);
+            }
+
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
             Application.ThreadException += delegate(object sender, ThreadExceptionEventArgs e)
             {
@@ -53,7 +58,7 @@ namespace WinZoneTrigger
 
             if (!TryAcquireSingleInstance())
             {
-                return;
+                return 0;
             }
 
             try
@@ -63,6 +68,7 @@ namespace WinZoneTrigger
                 bool startMinimized = args != null && args.Any(a => string.Equals(a, "--minimized", StringComparison.OrdinalIgnoreCase));
                 bool startedFromWindowsStartup = args != null && args.Any(a => string.Equals(a, "--startup", StringComparison.OrdinalIgnoreCase));
                 Application.Run(new MainForm(startMinimized, startedFromWindowsStartup));
+                return 0;
             }
             finally
             {
@@ -130,6 +136,11 @@ namespace WinZoneTrigger
         private static string QuoteArgument(string value)
         {
             return "\"" + (value ?? "").Replace("\"", "\\\"") + "\"";
+        }
+
+        private static bool HasArgument(string[] args, string value)
+        {
+            return args != null && args.Any(a => string.Equals(a, value, StringComparison.OrdinalIgnoreCase));
         }
     }
 }
