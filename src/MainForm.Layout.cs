@@ -706,6 +706,19 @@ namespace WinZoneTrigger
             _backgroundProcessLabel = CreateStatusValueLabel("백그라운드 상태 확인 중입니다.");
             AddRowTo(_statusTable, "백그라운드", _backgroundProcessLabel);
 
+            FlowLayoutPanel statusRefreshPanel = new FlowLayoutPanel();
+            statusRefreshPanel.Dock = DockStyle.Fill;
+            statusRefreshPanel.AutoSize = true;
+            statusRefreshPanel.WrapContents = true;
+            Button refreshStatusButton = CreateButton("새로고침");
+            SetFixedButtonSize(refreshStatusButton, 92, 30);
+            refreshStatusButton.Click += delegate { RefreshStatusAndLogsNow(); };
+            statusRefreshPanel.Controls.Add(refreshStatusButton);
+            Label statusRefreshHint = CreateInlineLabel("백그라운드 상태와 실행 로그를 지금 다시 읽습니다.");
+            statusRefreshHint.Margin = new Padding(8, 7, 0, 4);
+            statusRefreshPanel.Controls.Add(statusRefreshHint);
+            AddRowTo(_statusTable, "화면 갱신", statusRefreshPanel);
+
             AddSectionHeaderTo(_statusTable, "실행 로그");
 
             _recentLogLabel = CreateStatusValueLabel("아직 기록된 이벤트가 없습니다.");

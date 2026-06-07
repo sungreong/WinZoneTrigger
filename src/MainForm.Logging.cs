@@ -11,10 +11,23 @@ namespace WinZoneTrigger
         private void LogRefreshTimerTick(object sender, EventArgs e)
         {
             RefreshLogDisplayFromFile();
-            RefreshAutomationStateFromFile();
+            RefreshAutomationStateFromFile(false);
         }
 
-        private void RefreshAutomationStateFromFile()
+        private void RefreshStatusAndLogsNow()
+        {
+            if (IsShuttingDown())
+            {
+                return;
+            }
+
+            RefreshLogDisplayFromFile();
+            RefreshAutomationStateFromFile(true);
+            RefreshSelectedAppWatchStatusLabel();
+            AppendLog("상태/로그를 수동으로 갱신했습니다.");
+        }
+
+        private void RefreshAutomationStateFromFile(bool force)
         {
             if (IsShuttingDown())
             {
@@ -29,7 +42,7 @@ namespace WinZoneTrigger
                 }
 
                 DateTime lastWriteUtc = File.GetLastWriteTimeUtc(AutomationStateStore.StatePath);
-                if (lastWriteUtc <= _automationStateLastWriteUtc)
+                if (!force && lastWriteUtc <= _automationStateLastWriteUtc)
                 {
                     return;
                 }
