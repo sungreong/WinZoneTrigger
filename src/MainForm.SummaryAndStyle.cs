@@ -305,6 +305,23 @@ namespace WinZoneTrigger
             Process.Start("explorer.exe", ConfigStore.ConfigDirectory);
         }
 
+        private void OpenSettingsDialog()
+        {
+            using (SettingsForm dialog = new SettingsForm(_startupCheck.Checked, _config.StartMinimized))
+            {
+                DialogResult result = dialog.ShowDialog(this);
+                if (result != DialogResult.OK)
+                {
+                    return;
+                }
+
+                _startupCheck.Checked = dialog.StartupEnabled;
+                _startMinimizedCheck.Checked = dialog.StartMinimized;
+                _config.StartMinimized = dialog.StartMinimized;
+                SaveFromUi();
+            }
+        }
+
         private void ApplyTheme(Control root)
         {
             ApplyThemeToControl(root);

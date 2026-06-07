@@ -897,7 +897,9 @@ namespace WinZoneTrigger
 
             public override string ToString()
             {
-                return Zone.Name + " · " + MetadataText;
+                string state = Zone.Enabled ? "운영 중" : "미운영";
+                string match = _owner.IsZoneActive(Zone) ? "조건 일치" : "대기";
+                return Zone.Name + " · " + state + " · " + match;
             }
         }
     }

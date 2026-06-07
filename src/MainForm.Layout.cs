@@ -59,20 +59,14 @@ namespace WinZoneTrigger
             topBar.Controls.Add(appTitle);
 
             _startupCheck = new CheckBox();
-            _startupCheck.Text = "Windows 시작 시 실행";
-            _startupCheck.AutoSize = true;
-            _startupCheck.Margin = new Padding(4, 8, 14, 4);
-            topBar.Controls.Add(_startupCheck);
+            _startupCheck.Visible = false;
 
             _startMinimizedCheck = new CheckBox();
-            _startMinimizedCheck.Text = "최소화로 시작";
-            _startMinimizedCheck.AutoSize = true;
-            _startMinimizedCheck.Margin = new Padding(4, 8, 14, 4);
-            topBar.Controls.Add(_startMinimizedCheck);
+            _startMinimizedCheck.Visible = false;
 
-            Button saveButton = CreateButton("전체 저장");
-            saveButton.Click += delegate { SaveFromUi(); };
-            topBar.Controls.Add(saveButton);
+            Button settingsButton = CreateButton("설정");
+            settingsButton.Click += delegate { OpenSettingsDialog(); };
+            topBar.Controls.Add(settingsButton);
 
             SplitContainer split = new SplitContainer();
             split.Dock = DockStyle.Fill;
