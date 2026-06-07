@@ -16,12 +16,24 @@ namespace WinZoneTrigger
             new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, DateTime> _lastAppWatchChecks =
             new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+        private readonly object _automationStateLock = new object();
         private readonly System.Windows.Forms.Timer _scanTimer;
         private readonly System.Windows.Forms.Timer _appWatchTimer;
         private AppConfig _config;
         private DateTime _configLastWriteUtc;
         private bool _scanInProgress;
         private bool _appWatchInProgress;
+        private List<string> _stateActiveZoneIds = new List<string>();
+        private List<string> _stateActiveZoneNames = new List<string>();
+        private LocationInfo _stateCurrentLocation;
+        private bool _stateLocationWasRequested;
+        private string _stateLocationError = "";
+        private List<string> _stateVisibleSsids = new List<string>();
+        private string _stateWifiError = "";
+        private DateTime _stateLastEventAtLocal;
+        private string _stateLastEventText = "";
+        private string _stateLastActionText = "";
+        private string _stateLastAppWatchText = "";
 
         public BackgroundAutomationContext()
         {
@@ -32,6 +44,7 @@ namespace WinZoneTrigger
             _appWatchTimer.Tick += AppWatchTimerTick;
 
             DiagnosticsLog.WriteEvent("백그라운드 자동 실행 모드 시작");
+            UpdateAutomationEvent("백그라운드 자동 실행 모드 시작", null, null);
             ResetTimers();
             StartInitialScan();
         }
@@ -136,6 +149,7 @@ namespace WinZoneTrigger
                 {
                     string message = task.Exception == null ? "알 수 없는 위치 확인 오류" : task.Exception.GetBaseException().Message;
                     DiagnosticsLog.WriteEvent("백그라운드 위치 확인 실패: " + message);
+                    UpdateAutomationEvent("백그라운드 위치 확인 실패: " + message, null, null);
                     return;
                 }
 
@@ -276,21 +290,25 @@ namespace WinZoneTrigger
                 }
             }
 
-            SaveAutomationState(activeZoneIds, activeZoneNames, snapshot, visibleSsids, currentLocation);
+            SaveAutomationState(activeZoneIds, activeZoneNames, snapshot, visibleSsids, currentLocation, "백그라운드 위치 조건 확인 완료");
         }
 
         private void TriggerZone(ZoneRule zone, string reason)
         {
-            DiagnosticsLog.WriteEvent(reason + ": " + zone.Name);
+            string startMessage = reason + ": " + zone.Name;
+            DiagnosticsLog.WriteEvent(startMessage);
+            UpdateAutomationEvent(startMessage, "동작 실행 중: " + zone.Name, null);
             Task.Factory.StartNew(delegate
             {
                 try
                 {
                     ZoneExecutor.Execute(zone, DiagnosticsLog.WriteEvent);
+                    UpdateAutomationEvent("동작 실행 완료: " + zone.Name, "완료: " + zone.Name, null);
                 }
                 catch (Exception ex)
                 {
                     DiagnosticsLog.Write("백그라운드 동작 실행 실패: " + (zone == null ? "" : zone.Name), ex);
+                    UpdateAutomationEvent("백그라운드 동작 실행 실패: " + (zone == null ? "" : zone.Name), "실패: " + (zone == null ? "" : zone.Name), null);
                 }
             });
         }
@@ -329,6 +347,7 @@ namespace WinZoneTrigger
 
             _appWatchInProgress = true;
             DiagnosticsLog.WriteEvent(reason + " 시작: " + dueTargets.Count + "개 항목");
+            UpdateAutomationEvent(reason + " 시작: " + dueTargets.Count + "개 항목", null, "확인 중: " + dueTargets.Count + "개 항목");
             Task.Factory.StartNew(delegate
             {
                 foreach (Tuple<ZoneRule, AppWatchItem> target in dueTargets)
@@ -349,10 +368,15 @@ namespace WinZoneTrigger
                             false,
                             DiagnosticsLog.WriteEvent);
                         DiagnosticsLog.WriteEvent(reason + " 결과(" + target.Item1.Name + "): " + result.Summary);
+                        UpdateAutomationEvent(
+                            reason + " 결과(" + target.Item1.Name + "): " + result.Summary,
+                            null,
+                            target.Item1.Name + ": " + result.Summary);
                     }
                     catch (Exception ex)
                     {
                         DiagnosticsLog.Write("백그라운드 앱 감시 실패: " + target.Item1.Name, ex);
+                        UpdateAutomationEvent("백그라운드 앱 감시 실패: " + target.Item1.Name, null, "실패: " + target.Item1.Name);
                     }
                 }
             }).ContinueWith(delegate
@@ -487,27 +511,78 @@ namespace WinZoneTrigger
             DiagnosticsLog.WriteEvent("백그라운드 설정 로드: " + reason + " / zones=" + _config.Zones.Count);
         }
 
-        private static void SaveAutomationState(
+        private void SaveAutomationState(
             List<string> activeZoneIds,
             List<string> activeZoneNames,
             ScanSnapshot snapshot,
             HashSet<string> visibleSsids,
-            LocationInfo currentLocation)
+            LocationInfo currentLocation,
+            string eventText)
         {
             LocationReadResult locationResult = snapshot == null ? null : snapshot.LocationResult;
+            lock (_automationStateLock)
+            {
+                _stateActiveZoneIds = activeZoneIds ?? new List<string>();
+                _stateActiveZoneNames = activeZoneNames ?? new List<string>();
+                _stateCurrentLocation = currentLocation;
+                _stateLocationWasRequested = locationResult != null && locationResult.WasRequested;
+                _stateLocationError = locationResult == null ? "" : locationResult.Error;
+                _stateVisibleSsids = visibleSsids == null
+                    ? new List<string>()
+                    : visibleSsids.OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToList();
+                _stateWifiError = snapshot == null ? "" : snapshot.WifiError;
+                SetLastEventLocked(eventText);
+                SaveAutomationStateLocked();
+            }
+        }
+
+        private void UpdateAutomationEvent(string eventText, string actionText, string appWatchText)
+        {
+            lock (_automationStateLock)
+            {
+                SetLastEventLocked(eventText);
+                if (!string.IsNullOrWhiteSpace(actionText))
+                {
+                    _stateLastActionText = actionText;
+                }
+
+                if (!string.IsNullOrWhiteSpace(appWatchText))
+                {
+                    _stateLastAppWatchText = appWatchText;
+                }
+
+                SaveAutomationStateLocked();
+            }
+        }
+
+        private void SetLastEventLocked(string eventText)
+        {
+            if (string.IsNullOrWhiteSpace(eventText))
+            {
+                return;
+            }
+
+            _stateLastEventAtLocal = DateTime.Now;
+            _stateLastEventText = eventText;
+        }
+
+        private void SaveAutomationStateLocked()
+        {
             AutomationStateStore.Save(new AutomationStateSnapshot
             {
                 UpdatedAtLocal = DateTime.Now,
                 ProcessId = Process.GetCurrentProcess().Id,
-                ActiveZoneIds = activeZoneIds ?? new List<string>(),
-                ActiveZoneNames = activeZoneNames ?? new List<string>(),
-                CurrentLocation = currentLocation,
-                LocationWasRequested = locationResult != null && locationResult.WasRequested,
-                LocationError = locationResult == null ? "" : locationResult.Error,
-                VisibleSsids = visibleSsids == null
-                    ? new List<string>()
-                    : visibleSsids.OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToList(),
-                WifiError = snapshot == null ? "" : snapshot.WifiError
+                ActiveZoneIds = new List<string>(_stateActiveZoneIds),
+                ActiveZoneNames = new List<string>(_stateActiveZoneNames),
+                CurrentLocation = _stateCurrentLocation,
+                LocationWasRequested = _stateLocationWasRequested,
+                LocationError = _stateLocationError,
+                VisibleSsids = new List<string>(_stateVisibleSsids),
+                WifiError = _stateWifiError,
+                LastEventAtLocal = _stateLastEventAtLocal,
+                LastEventText = _stateLastEventText,
+                LastActionText = _stateLastActionText,
+                LastAppWatchText = _stateLastAppWatchText
             });
         }
     }

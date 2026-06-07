@@ -683,34 +683,27 @@ namespace WinZoneTrigger
 
             AddSectionHeaderTo(_statusTable, "현재 상태");
 
-            _activeZonesLabel = new Label();
-            _activeZonesLabel.Dock = DockStyle.Fill;
-            _activeZonesLabel.AutoSize = true;
-            _activeZonesLabel.MaximumSize = new Size(760, 0);
-            _activeZonesLabel.Text = "아직 확인 전입니다.";
+            _activeZonesLabel = CreateStatusValueLabel("아직 확인 전입니다.");
             AddRowTo(_statusTable, "조건 일치", _activeZonesLabel);
 
-            _currentLocationLabel = new Label();
-            _currentLocationLabel.Dock = DockStyle.Fill;
-            _currentLocationLabel.AutoSize = true;
-            _currentLocationLabel.MaximumSize = new Size(760, 0);
-            _currentLocationLabel.Text = "아직 위치 확인 전입니다.";
+            _currentLocationLabel = CreateStatusValueLabel("아직 위치 확인 전입니다.");
             AddRowTo(_statusTable, "현재 위치", _currentLocationLabel);
 
-            _visibleNetworksLabel = new Label();
-            _visibleNetworksLabel.Dock = DockStyle.Fill;
-            _visibleNetworksLabel.AutoSize = true;
-            _visibleNetworksLabel.MaximumSize = new Size(760, 0);
-            _visibleNetworksLabel.Text = "아직 Wi-Fi 확인 전입니다.";
+            _visibleNetworksLabel = CreateStatusValueLabel("아직 Wi-Fi 확인 전입니다.");
             AddRowTo(_statusTable, "보이는 Wi-Fi", _visibleNetworksLabel);
+
+            _lastActionLabel = CreateStatusValueLabel("아직 실행된 동작이 없습니다.");
+            AddRowTo(_statusTable, "최근 동작", _lastActionLabel);
+
+            _lastAppWatchLabel = CreateStatusValueLabel("아직 앱 감시 결과가 없습니다.");
+            AddRowTo(_statusTable, "앱 감시", _lastAppWatchLabel);
+
+            _backgroundProcessLabel = CreateStatusValueLabel("백그라운드 상태 확인 중입니다.");
+            AddRowTo(_statusTable, "백그라운드", _backgroundProcessLabel);
 
             AddSectionHeaderTo(_statusTable, "실행 로그");
 
-            _recentLogLabel = new Label();
-            _recentLogLabel.Dock = DockStyle.Fill;
-            _recentLogLabel.AutoSize = true;
-            _recentLogLabel.MaximumSize = new Size(760, 0);
-            _recentLogLabel.Text = "아직 기록된 이벤트가 없습니다.";
+            _recentLogLabel = CreateStatusValueLabel("아직 기록된 이벤트가 없습니다.");
             AddRowTo(_statusTable, "최근 이벤트", _recentLogLabel);
 
             _logText = new TextBox();

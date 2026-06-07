@@ -17,6 +17,10 @@ namespace WinZoneTrigger
         public string LocationError { get; set; }
         public List<string> VisibleSsids { get; set; }
         public string WifiError { get; set; }
+        public DateTime LastEventAtLocal { get; set; }
+        public string LastEventText { get; set; }
+        public string LastActionText { get; set; }
+        public string LastAppWatchText { get; set; }
     }
 
     internal static class AutomationStateStore

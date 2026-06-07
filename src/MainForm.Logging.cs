@@ -10,8 +10,8 @@ namespace WinZoneTrigger
     {
         private void LogRefreshTimerTick(object sender, EventArgs e)
         {
-            RefreshAutomationStateFromFile();
             RefreshLogDisplayFromFile();
+            RefreshAutomationStateFromFile();
         }
 
         private void RefreshAutomationStateFromFile()
@@ -66,31 +66,38 @@ namespace WinZoneTrigger
             }
 
             List<string> activeNames = snapshot.ActiveZoneNames ?? new List<string>();
-            if (_activeZonesLabel != null && !_activeZonesLabel.IsDisposed)
-            {
-                string prefix = activeNames.Count == 0 ? "없음" : string.Join(", ", activeNames.ToArray());
-                _activeZonesLabel.Text = prefix + " · 백그라운드 " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss");
-            }
+            string activePrefix = activeNames.Count == 0 ? "없음" : string.Join(", ", activeNames.ToArray());
+            SetStatusLabel(
+                _activeZonesLabel,
+                activePrefix + " · 백그라운드 " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss"),
+                activeNames.Count > 0);
 
             if (_currentLocationLabel != null && !_currentLocationLabel.IsDisposed)
             {
                 if (snapshot.CurrentLocation != null)
                 {
-                    _currentLocationLabel.Text = FormatLocation(snapshot.CurrentLocation)
-                        + " · 백그라운드 " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss");
+                    SetStatusLabel(
+                        _currentLocationLabel,
+                        FormatLocation(snapshot.CurrentLocation)
+                            + " · 백그라운드 " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss"),
+                        true);
                 }
                 else if (snapshot.LocationWasRequested)
                 {
                     string error = string.IsNullOrWhiteSpace(snapshot.LocationError)
                         ? "Windows 위치를 사용할 수 없습니다."
                         : snapshot.LocationError;
-                    _currentLocationLabel.Text = "사용 불가: " + error
-                        + " · 백그라운드 " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss");
+                    SetStatusLabel(
+                        _currentLocationLabel,
+                        "사용 불가: " + error + " · 백그라운드 " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss"),
+                        false);
                 }
                 else
                 {
-                    _currentLocationLabel.Text = "백그라운드에서 좌표 감지를 요청하지 않았습니다. · "
-                        + snapshot.UpdatedAtLocal.ToString("HH:mm:ss");
+                    SetStatusLabel(
+                        _currentLocationLabel,
+                        "백그라운드에서 좌표 감지를 요청하지 않았습니다. · " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss"),
+                        false);
                 }
             }
 
@@ -99,24 +106,68 @@ namespace WinZoneTrigger
                 List<string> visibleSsids = snapshot.VisibleSsids ?? new List<string>();
                 if (!string.IsNullOrWhiteSpace(snapshot.WifiError))
                 {
-                    _visibleNetworksLabel.Text = "사용 불가: " + snapshot.WifiError
-                        + " · 백그라운드 " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss");
+                    SetStatusLabel(
+                        _visibleNetworksLabel,
+                        "사용 불가: " + snapshot.WifiError + " · 백그라운드 " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss"),
+                        false);
                 }
                 else if (visibleSsids.Count == 0)
                 {
-                    _visibleNetworksLabel.Text = "보이는 Wi-Fi가 없습니다. · 백그라운드 "
-                        + snapshot.UpdatedAtLocal.ToString("HH:mm:ss");
+                    SetStatusLabel(
+                        _visibleNetworksLabel,
+                        "보이는 Wi-Fi가 없습니다. · 백그라운드 " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss"),
+                        false);
                 }
                 else
                 {
-                    _visibleNetworksLabel.Text = string.Join(", ", visibleSsids.Take(12).ToArray())
-                        + " · 백그라운드 " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss");
+                    SetStatusLabel(
+                        _visibleNetworksLabel,
+                        string.Join(", ", visibleSsids.Take(12).ToArray())
+                            + " · 백그라운드 " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss"),
+                        true);
                 }
+            }
+
+            SetStatusLabel(
+                _lastActionLabel,
+                string.IsNullOrWhiteSpace(snapshot.LastActionText) ? "아직 실행된 동작이 없습니다." : snapshot.LastActionText,
+                !string.IsNullOrWhiteSpace(snapshot.LastActionText));
+            SetStatusLabel(
+                _lastAppWatchLabel,
+                string.IsNullOrWhiteSpace(snapshot.LastAppWatchText) ? "아직 앱 감시 결과가 없습니다." : snapshot.LastAppWatchText,
+                !string.IsNullOrWhiteSpace(snapshot.LastAppWatchText));
+            SetStatusLabel(
+                _backgroundProcessLabel,
+                "pid " + snapshot.ProcessId + " · 상태 갱신 " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss"),
+                snapshot.ProcessId > 0);
+
+            if (!string.IsNullOrWhiteSpace(snapshot.LastEventText))
+            {
+                DateTime eventTime = snapshot.LastEventAtLocal == DateTime.MinValue
+                    ? snapshot.UpdatedAtLocal
+                    : snapshot.LastEventAtLocal;
+                SetStatusLabel(
+                    _recentLogLabel,
+                    eventTime.ToString("yyyy-MM-dd HH:mm:ss") + "  " + snapshot.LastEventText,
+                    true);
             }
 
             InvalidateZoneLists();
             UpdateSelectedZoneSummary();
             RefreshSelectedAppWatchStatusLabel();
+        }
+
+        private void SetStatusLabel(Label label, string text, bool emphasized)
+        {
+            if (label == null || label.IsDisposed)
+            {
+                return;
+            }
+
+            label.Text = text ?? "";
+            label.BackColor = emphasized ? UiAccentSoft : UiSurface;
+            label.ForeColor = emphasized ? UiAccentDark : UiText;
+            label.Padding = new Padding(8, 4, 8, 4);
         }
 
         private void RefreshLogDisplayFromFile()

@@ -518,6 +518,20 @@ namespace WinZoneTrigger
             return label;
         }
 
+        private Label CreateStatusValueLabel(string text)
+        {
+            Label label = new Label();
+            label.Text = text;
+            label.Dock = DockStyle.Fill;
+            label.AutoSize = true;
+            label.MaximumSize = new Size(760, 0);
+            label.MinimumSize = new Size(0, 24);
+            label.Padding = new Padding(0, 3, 0, 3);
+            label.ForeColor = UiText;
+            label.Tag = "StatusValue";
+            return label;
+        }
+
         private Size GetChipSize(string text, Font font)
         {
             Size measured = TextRenderer.MeasureText(text ?? "", font ?? Font);

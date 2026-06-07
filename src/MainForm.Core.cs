@@ -99,6 +99,9 @@ namespace WinZoneTrigger
         private Label _activeZonesLabel;
         private Label _currentLocationLabel;
         private Label _visibleNetworksLabel;
+        private Label _lastActionLabel;
+        private Label _lastAppWatchLabel;
+        private Label _backgroundProcessLabel;
         private TextBox _logText;
         private Label _recentLogLabel;
         private ToolTip _toolTip;
