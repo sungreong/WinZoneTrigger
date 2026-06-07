@@ -108,6 +108,11 @@ namespace WinZoneTrigger
             testActionsButton.Click += delegate { TestSelectedZoneActions(); };
             buttons.Controls.Add(testActionsButton);
 
+            Button refreshScreenButton = CreateButton("화면 갱신");
+            SetFixedButtonSize(refreshScreenButton, 100, 34);
+            refreshScreenButton.Click += delegate { RefreshStatusAndLogsNow(); };
+            buttons.Controls.Add(refreshScreenButton);
+
             Button openConfigButton = CreateButton("설정 폴더");
             SetFixedButtonSize(openConfigButton, 100, 34);
             openConfigButton.Click += delegate { OpenConfigFolder(); };

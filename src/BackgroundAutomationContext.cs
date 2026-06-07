@@ -34,6 +34,9 @@ namespace WinZoneTrigger
         private string _stateLastEventText = "";
         private string _stateLastActionText = "";
         private string _stateLastAppWatchText = "";
+        private string _stateLastAppWatchZoneId = "";
+        private string _stateLastAppWatchItemId = "";
+        private string _stateLastAppWatchItemText = "";
 
         public BackgroundAutomationContext()
         {
@@ -362,21 +365,37 @@ namespace WinZoneTrigger
 
                     try
                     {
+                        DateTime checkedAtLocal = DateTime.Now;
+                        DateTime nextCheckAtLocal = checkedAtLocal.AddMilliseconds(
+                            GetAppWatchIntervalMilliseconds(item.IntervalValue, item.IntervalUnit));
+                        bool requireWindow = item.RequireWindow.GetValueOrDefault(false);
                         AppWatchCheckResult result = AppWatchdog.EnsureRunning(
                             processName,
                             item.LaunchTarget,
-                            false,
+                            requireWindow,
                             DiagnosticsLog.WriteEvent);
-                        DiagnosticsLog.WriteEvent(reason + " 결과(" + target.Item1.Name + "): " + result.Summary);
+                        string itemText = BuildAppWatchStatusText(result.Summary, checkedAtLocal, nextCheckAtLocal);
+                        string appWatchText = target.Item1.Name + ": " + itemText;
+                        DiagnosticsLog.WriteEvent(reason + " 결과(" + target.Item1.Name + "): " + itemText);
                         UpdateAutomationEvent(
-                            reason + " 결과(" + target.Item1.Name + "): " + result.Summary,
+                            reason + " 결과(" + target.Item1.Name + "): " + itemText,
                             null,
-                            target.Item1.Name + ": " + result.Summary);
+                            appWatchText,
+                            target.Item1.Id,
+                            item.Id,
+                            itemText);
                     }
                     catch (Exception ex)
                     {
                         DiagnosticsLog.Write("백그라운드 앱 감시 실패: " + target.Item1.Name, ex);
-                        UpdateAutomationEvent("백그라운드 앱 감시 실패: " + target.Item1.Name, null, "실패: " + target.Item1.Name);
+                        string itemText = "실패: " + target.Item1.Name;
+                        UpdateAutomationEvent(
+                            "백그라운드 앱 감시 실패: " + target.Item1.Name,
+                            null,
+                            itemText,
+                            target.Item1.Id,
+                            item.Id,
+                            itemText);
                     }
                 }
             }).ContinueWith(delegate
@@ -538,6 +557,17 @@ namespace WinZoneTrigger
 
         private void UpdateAutomationEvent(string eventText, string actionText, string appWatchText)
         {
+            UpdateAutomationEvent(eventText, actionText, appWatchText, "", "", "");
+        }
+
+        private void UpdateAutomationEvent(
+            string eventText,
+            string actionText,
+            string appWatchText,
+            string appWatchZoneId,
+            string appWatchItemId,
+            string appWatchItemText)
+        {
             lock (_automationStateLock)
             {
                 SetLastEventLocked(eventText);
@@ -549,6 +579,13 @@ namespace WinZoneTrigger
                 if (!string.IsNullOrWhiteSpace(appWatchText))
                 {
                     _stateLastAppWatchText = appWatchText;
+                }
+
+                if (!string.IsNullOrWhiteSpace(appWatchZoneId) && !string.IsNullOrWhiteSpace(appWatchItemId))
+                {
+                    _stateLastAppWatchZoneId = appWatchZoneId;
+                    _stateLastAppWatchItemId = appWatchItemId;
+                    _stateLastAppWatchItemText = appWatchItemText ?? "";
                 }
 
                 SaveAutomationStateLocked();
@@ -582,8 +619,18 @@ namespace WinZoneTrigger
                 LastEventAtLocal = _stateLastEventAtLocal,
                 LastEventText = _stateLastEventText,
                 LastActionText = _stateLastActionText,
-                LastAppWatchText = _stateLastAppWatchText
+                LastAppWatchText = _stateLastAppWatchText,
+                LastAppWatchZoneId = _stateLastAppWatchZoneId,
+                LastAppWatchItemId = _stateLastAppWatchItemId,
+                LastAppWatchItemText = _stateLastAppWatchItemText
             });
+        }
+
+        private static string BuildAppWatchStatusText(string summary, DateTime checkedAtLocal, DateTime nextCheckAtLocal)
+        {
+            return "확인 " + checkedAtLocal.ToString("yyyy-MM-dd HH:mm:ss")
+                + " · 다음 확인 " + nextCheckAtLocal.ToString("yyyy-MM-dd HH:mm:ss")
+                + " · " + (summary ?? "");
         }
     }
 }

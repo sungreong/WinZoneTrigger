@@ -149,6 +149,7 @@ namespace WinZoneTrigger
                 _lastAppWatchLabel,
                 string.IsNullOrWhiteSpace(snapshot.LastAppWatchText) ? "아직 앱 감시 결과가 없습니다." : snapshot.LastAppWatchText,
                 !string.IsNullOrWhiteSpace(snapshot.LastAppWatchText));
+            ApplyBackgroundAppWatchStatus(snapshot);
             SetStatusLabel(
                 _backgroundProcessLabel,
                 "pid " + snapshot.ProcessId + " · 상태 갱신 " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss"),
@@ -168,6 +169,23 @@ namespace WinZoneTrigger
             InvalidateZoneLists();
             UpdateSelectedZoneSummary();
             RefreshSelectedAppWatchStatusLabel();
+        }
+
+        private void ApplyBackgroundAppWatchStatus(AutomationStateSnapshot snapshot)
+        {
+            if (snapshot == null
+                || string.IsNullOrWhiteSpace(snapshot.LastAppWatchZoneId)
+                || string.IsNullOrWhiteSpace(snapshot.LastAppWatchItemId)
+                || string.IsNullOrWhiteSpace(snapshot.LastAppWatchItemText))
+            {
+                return;
+            }
+
+            string key = BuildAppWatchStatusKey(snapshot.LastAppWatchZoneId, snapshot.LastAppWatchItemId);
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                _lastAppWatchStatusTexts[key] = snapshot.LastAppWatchItemText;
+            }
         }
 
         private void SetStatusLabel(Label label, string text, bool emphasized)

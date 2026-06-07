@@ -21,6 +21,9 @@ namespace WinZoneTrigger
         public string LastEventText { get; set; }
         public string LastActionText { get; set; }
         public string LastAppWatchText { get; set; }
+        public string LastAppWatchZoneId { get; set; }
+        public string LastAppWatchItemId { get; set; }
+        public string LastAppWatchItemText { get; set; }
     }
 
     internal static class AutomationStateStore
