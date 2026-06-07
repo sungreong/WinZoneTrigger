@@ -357,13 +357,12 @@ namespace WinZoneTrigger
             row.Tag = item.Id;
 
             CheckBox toggle = new CheckBox();
-            toggle.Appearance = Appearance.Button;
-            toggle.AutoSize = false;
-            toggle.Size = new Size(58, 30);
+            toggle.Appearance = Appearance.Normal;
+            toggle.AutoSize = true;
             toggle.Margin = new Padding(2, 3, 4, 3);
             toggle.Tag = item.Id;
             toggle.Checked = item.Enabled;
-            StyleSwitchToggle(toggle, "ON", "OFF");
+            StyleSwitchToggle(toggle, "사용", "미사용");
             toggle.CheckedChanged += delegate
             {
                 if (_loadingSelection)
@@ -494,8 +493,8 @@ namespace WinZoneTrigger
                 _appWatchIntervalInput.Value = item == null
                     ? 5
                     : Math.Max(_appWatchIntervalInput.Minimum, Math.Min(_appWatchIntervalInput.Maximum, item.IntervalValue));
-                StyleSwitchToggle(_appWatchEnabledCheck, "ON", "OFF");
-                StyleSwitchToggle(_appWatchRequireWindowCheck, "창 ON", "창 OFF");
+                StyleSwitchToggle(_appWatchEnabledCheck, "앱 감시 사용", "앱 감시 미사용");
+                StyleSwitchToggle(_appWatchRequireWindowCheck, "표시 창 필요", "표시 창 무시");
                 UpdateAppWatchStatusLabel(item == null ? "등록된 앱 감시가 없습니다." : BuildCurrentAppWatchStatusText(zone, item));
             }
             finally

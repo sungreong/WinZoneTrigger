@@ -62,13 +62,12 @@ namespace WinZoneTrigger
         private void AddWifiToggle(string ssid, string text, bool isChecked)
         {
             CheckBox toggle = new CheckBox();
-            toggle.Appearance = Appearance.Button;
-            toggle.AutoSize = false;
+            toggle.Appearance = Appearance.Normal;
+            toggle.AutoSize = true;
             toggle.Text = text;
             toggle.Tag = ssid;
             toggle.Checked = isChecked;
             toggle.Margin = new Padding(4, 3, 4, 3);
-            toggle.Size = GetChipSize(text, Font);
             StyleToggleButton(toggle);
             toggle.CheckedChanged += delegate
             {
@@ -129,11 +128,7 @@ namespace WinZoneTrigger
                 button.Size = new Size(chipSize.Width, 30);
                 if (string.Equals(network.Ssid, selected, StringComparison.OrdinalIgnoreCase))
                 {
-                    button.Font = new Font(button.Font, FontStyle.Bold);
-                    button.BackColor = UiAccentSoft;
-                    button.ForeColor = UiAccentDark;
-                    button.FlatAppearance.BorderColor = UiAccent;
-                    button.FlatAppearance.MouseOverBackColor = Color.FromArgb(207, 232, 218);
+                    button.Text = "선택됨: " + button.Text;
                 }
                 button.Click += delegate
                 {

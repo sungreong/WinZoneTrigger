@@ -99,7 +99,6 @@ internal static class InstallerProgram
         private readonly Button _installButton;
         private readonly Button _uninstallButton;
         private readonly Button _closeButton;
-        private readonly PictureBox _iconBox;
 
         public InstallerForm()
         {
@@ -113,26 +112,6 @@ internal static class InstallerProgram
             ForeColor = UiText;
             Font = new Font("Malgun Gothic", 9.25F);
 
-            Icon extractedIcon = null;
-            try
-            {
-                extractedIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-                if (extractedIcon != null)
-                {
-                    Icon = (Icon)extractedIcon.Clone();
-                }
-            }
-            catch
-            {
-            }
-            finally
-            {
-                if (extractedIcon != null)
-                {
-                    extractedIcon.Dispose();
-                }
-            }
-
             Panel header = new Panel
             {
                 BackColor = UiAccentSoft,
@@ -141,25 +120,13 @@ internal static class InstallerProgram
             };
             Controls.Add(header);
 
-            _iconBox = new PictureBox
-            {
-                Location = new Point(24, 24),
-                Size = new Size(42, 42),
-                SizeMode = PictureBoxSizeMode.CenterImage
-            };
-            if (Icon != null)
-            {
-                _iconBox.Image = Icon.ToBitmap();
-            }
-            header.Controls.Add(_iconBox);
-
             Label title = new Label
             {
                 AutoSize = false,
                 Text = "위치 자동 실행 설치",
                 Font = new Font(Font.FontFamily, 13F, FontStyle.Bold),
                 ForeColor = UiAccentDark,
-                Location = new Point(80, 22),
+                Location = new Point(24, 22),
                 Size = new Size(512, 28)
             };
             header.Controls.Add(title);
@@ -169,7 +136,7 @@ internal static class InstallerProgram
                 AutoSize = false,
                 Text = "현재 사용자 계정에 앱을 설치하고 시작 메뉴, 자동 시작, 삭제 항목을 등록합니다.",
                 ForeColor = UiTextMuted,
-                Location = new Point(82, 54),
+                Location = new Point(26, 54),
                 Size = new Size(512, 24)
             };
             header.Controls.Add(description);
@@ -202,7 +169,7 @@ internal static class InstallerProgram
                 Text = "Windows 시작 시 자동 실행",
                 Checked = true,
                 AutoSize = true,
-                FlatStyle = FlatStyle.Flat,
+                FlatStyle = FlatStyle.Standard,
                 BackColor = UiBackground,
                 ForeColor = UiText,
                 Location = new Point(122, 164)
@@ -214,7 +181,7 @@ internal static class InstallerProgram
                 Text = "설치 후 앱 실행",
                 Checked = true,
                 AutoSize = true,
-                FlatStyle = FlatStyle.Flat,
+                FlatStyle = FlatStyle.Standard,
                 BackColor = UiBackground,
                 ForeColor = UiText,
                 Location = new Point(122, 194)
@@ -272,13 +239,6 @@ internal static class InstallerProgram
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
-            if (_iconBox != null && _iconBox.Image != null)
-            {
-                Image image = _iconBox.Image;
-                _iconBox.Image = null;
-                image.Dispose();
-            }
-
             if (Icon != null)
             {
                 Icon icon = Icon;
@@ -291,37 +251,18 @@ internal static class InstallerProgram
 
         private void StyleButton(Button button, bool primary)
         {
-            button.FlatStyle = FlatStyle.Flat;
-            button.UseVisualStyleBackColor = false;
+            button.FlatStyle = FlatStyle.Standard;
+            button.UseVisualStyleBackColor = true;
             button.Cursor = Cursors.Hand;
-
-            if (primary)
-            {
-                button.BackColor = UiAccent;
-                button.ForeColor = Color.White;
-                button.FlatAppearance.BorderColor = UiAccentDark;
-                button.FlatAppearance.MouseOverBackColor = UiAccentDark;
-                button.FlatAppearance.MouseDownBackColor = Color.FromArgb(12, 68, 51);
-                return;
-            }
-
-            button.BackColor = UiSurface;
-            button.ForeColor = UiText;
-            button.FlatAppearance.BorderColor = UiBorder;
-            button.FlatAppearance.MouseOverBackColor = UiSurfaceMuted;
-            button.FlatAppearance.MouseDownBackColor = Color.FromArgb(224, 231, 221);
+            button.ForeColor = SystemColors.ControlText;
         }
 
         private void StyleDangerButton(Button button)
         {
-            button.FlatStyle = FlatStyle.Flat;
-            button.UseVisualStyleBackColor = false;
+            button.FlatStyle = FlatStyle.Standard;
+            button.UseVisualStyleBackColor = true;
             button.Cursor = Cursors.Hand;
-            button.BackColor = UiSurface;
-            button.ForeColor = UiDanger;
-            button.FlatAppearance.BorderColor = Color.FromArgb(222, 190, 184);
-            button.FlatAppearance.MouseOverBackColor = Color.FromArgb(252, 237, 233);
-            button.FlatAppearance.MouseDownBackColor = Color.FromArgb(244, 217, 211);
+            button.ForeColor = SystemColors.ControlText;
         }
 
         private void InstallButtonClick(object sender, EventArgs e)

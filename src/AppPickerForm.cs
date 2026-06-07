@@ -136,23 +136,9 @@ namespace WinZoneTrigger
             button.Size = new Size(Math.Max(80, TextRenderer.MeasureText(text, Font).Width + 34), 32);
             button.Margin = new Padding(6, 0, 0, 0);
             button.Cursor = Cursors.Hand;
-            button.FlatStyle = FlatStyle.Flat;
-            button.UseVisualStyleBackColor = false;
-
-            if (primary)
-            {
-                button.BackColor = Color.FromArgb(31, 122, 92);
-                button.ForeColor = Color.White;
-                button.FlatAppearance.BorderColor = Color.FromArgb(20, 91, 69);
-                button.FlatAppearance.MouseOverBackColor = Color.FromArgb(20, 91, 69);
-            }
-            else
-            {
-                button.BackColor = Color.FromArgb(253, 253, 249);
-                button.ForeColor = Color.FromArgb(35, 45, 47);
-                button.FlatAppearance.BorderColor = Color.FromArgb(211, 218, 207);
-                button.FlatAppearance.MouseOverBackColor = Color.FromArgb(239, 243, 235);
-            }
+            button.FlatStyle = FlatStyle.Standard;
+            button.UseVisualStyleBackColor = true;
+            button.ForeColor = SystemColors.ControlText;
 
             return button;
         }

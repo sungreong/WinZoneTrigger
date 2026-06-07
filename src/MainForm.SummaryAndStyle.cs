@@ -354,16 +354,15 @@ namespace WinZoneTrigger
             else if (control is CheckBox)
             {
                 CheckBox checkBox = (CheckBox)control;
-                checkBox.ForeColor = UiText;
-                checkBox.FlatStyle = FlatStyle.Flat;
-                checkBox.BackColor = GetStableBackColor(checkBox);
+                checkBox.FlatStyle = FlatStyle.Standard;
+                checkBox.UseVisualStyleBackColor = true;
             }
             else if (control is ComboBox)
             {
                 ComboBox comboBox = (ComboBox)control;
                 comboBox.BackColor = UiSurface;
                 comboBox.ForeColor = UiText;
-                comboBox.FlatStyle = FlatStyle.Flat;
+                comboBox.FlatStyle = FlatStyle.Standard;
             }
             else if (control is NumericUpDown)
             {
@@ -475,34 +474,9 @@ namespace WinZoneTrigger
                 return;
             }
 
-            button.FlatStyle = FlatStyle.Flat;
-            button.UseVisualStyleBackColor = false;
-            button.Font = new Font(Font.FontFamily, 9F, FontStyle.Regular, GraphicsUnit.Point);
-
-            if (tone == ButtonTone.Primary)
-            {
-                button.BackColor = UiAccent;
-                button.ForeColor = Color.White;
-                button.FlatAppearance.BorderColor = UiAccentDark;
-                button.FlatAppearance.MouseOverBackColor = UiAccentDark;
-                button.FlatAppearance.MouseDownBackColor = Color.FromArgb(12, 68, 51);
-            }
-            else if (tone == ButtonTone.Danger)
-            {
-                button.BackColor = UiSurface;
-                button.ForeColor = UiDanger;
-                button.FlatAppearance.BorderColor = Color.FromArgb(222, 190, 184);
-                button.FlatAppearance.MouseOverBackColor = Color.FromArgb(252, 237, 233);
-                button.FlatAppearance.MouseDownBackColor = Color.FromArgb(244, 217, 211);
-            }
-            else
-            {
-                button.BackColor = UiSurface;
-                button.ForeColor = UiText;
-                button.FlatAppearance.BorderColor = UiBorder;
-                button.FlatAppearance.MouseOverBackColor = UiSurfaceMuted;
-                button.FlatAppearance.MouseDownBackColor = Color.FromArgb(224, 231, 221);
-            }
+            button.FlatStyle = FlatStyle.Standard;
+            button.UseVisualStyleBackColor = true;
+            button.ForeColor = SystemColors.ControlText;
         }
 
         private ListBox CreateZoneListBox()
@@ -592,24 +566,14 @@ namespace WinZoneTrigger
 
         private void StyleChip(Button chip, bool selected)
         {
-            chip.FlatStyle = FlatStyle.Flat;
-            chip.UseVisualStyleBackColor = false;
             if (selected)
             {
-                chip.BackColor = UiAccent;
-                chip.ForeColor = Color.White;
-                chip.FlatAppearance.BorderColor = UiAccentDark;
-                chip.FlatAppearance.MouseOverBackColor = UiAccentDark;
-                chip.FlatAppearance.MouseDownBackColor = Color.FromArgb(12, 68, 51);
+                chip.Text = "선택됨: " + chip.Text;
             }
-            else
-            {
-                chip.BackColor = UiSurface;
-                chip.ForeColor = UiText;
-                chip.FlatAppearance.BorderColor = UiBorder;
-                chip.FlatAppearance.MouseOverBackColor = UiSurfaceMuted;
-                chip.FlatAppearance.MouseDownBackColor = Color.FromArgb(224, 231, 221);
-            }
+
+            chip.FlatStyle = FlatStyle.Standard;
+            chip.UseVisualStyleBackColor = true;
+            chip.ForeColor = SystemColors.ControlText;
         }
 
         private string ShortenUrlForChip(string value)
@@ -652,29 +616,13 @@ namespace WinZoneTrigger
                 return;
             }
 
-            toggle.FlatStyle = FlatStyle.Flat;
-            toggle.UseVisualStyleBackColor = false;
             toggle.Padding = new Padding(8, 3, 8, 3);
             toggle.MinimumSize = new Size(72, 28);
             toggle.TextAlign = ContentAlignment.MiddleCenter;
             toggle.Cursor = Cursors.Hand;
-
-            if (toggle.Checked)
-            {
-                toggle.BackColor = UiAccent;
-                toggle.ForeColor = Color.White;
-                toggle.FlatAppearance.BorderColor = UiAccentDark;
-                toggle.FlatAppearance.MouseOverBackColor = UiAccentDark;
-                toggle.FlatAppearance.MouseDownBackColor = Color.FromArgb(12, 68, 51);
-            }
-            else
-            {
-                toggle.BackColor = UiSurface;
-                toggle.ForeColor = UiText;
-                toggle.FlatAppearance.BorderColor = UiBorder;
-                toggle.FlatAppearance.MouseOverBackColor = UiSurfaceMuted;
-                toggle.FlatAppearance.MouseDownBackColor = Color.FromArgb(224, 231, 221);
-            }
+            toggle.FlatStyle = FlatStyle.Standard;
+            toggle.UseVisualStyleBackColor = true;
+            toggle.ForeColor = SystemColors.ControlText;
         }
 
         private void StyleSwitchToggle(CheckBox toggle, string checkedText, string uncheckedText)
@@ -684,8 +632,8 @@ namespace WinZoneTrigger
                 return;
             }
 
-            toggle.Appearance = Appearance.Button;
-            toggle.AutoSize = false;
+            toggle.Appearance = Appearance.Normal;
+            toggle.AutoSize = true;
             toggle.Text = toggle.Checked ? checkedText : uncheckedText;
             StyleToggleButton(toggle);
         }

@@ -579,19 +579,17 @@ namespace WinZoneTrigger
             appWatchStatePanel.Margin = new Padding(0);
 
             _appWatchEnabledCheck = new CheckBox();
-            _appWatchEnabledCheck.Appearance = Appearance.Button;
-            _appWatchEnabledCheck.AutoSize = false;
-            _appWatchEnabledCheck.Size = new Size(64, 30);
+            _appWatchEnabledCheck.Appearance = Appearance.Normal;
+            _appWatchEnabledCheck.AutoSize = true;
             _appWatchEnabledCheck.Margin = new Padding(4);
-            StyleSwitchToggle(_appWatchEnabledCheck, "ON", "OFF");
+            StyleSwitchToggle(_appWatchEnabledCheck, "앱 감시 사용", "앱 감시 미사용");
             appWatchStatePanel.Controls.Add(_appWatchEnabledCheck);
 
             _appWatchRequireWindowCheck = new CheckBox();
-            _appWatchRequireWindowCheck.Appearance = Appearance.Button;
-            _appWatchRequireWindowCheck.AutoSize = false;
-            _appWatchRequireWindowCheck.Size = new Size(92, 30);
+            _appWatchRequireWindowCheck.Appearance = Appearance.Normal;
+            _appWatchRequireWindowCheck.AutoSize = true;
             _appWatchRequireWindowCheck.Margin = new Padding(4);
-            StyleSwitchToggle(_appWatchRequireWindowCheck, "창 ON", "창 OFF");
+            StyleSwitchToggle(_appWatchRequireWindowCheck, "표시 창 필요", "표시 창 무시");
             appWatchStatePanel.Controls.Add(_appWatchRequireWindowCheck);
 
             Label appWatchStateHint = new Label();
@@ -783,7 +781,7 @@ namespace WinZoneTrigger
                 {
                     return;
                 }
-                StyleSwitchToggle(_appWatchEnabledCheck, "ON", "OFF");
+                StyleSwitchToggle(_appWatchEnabledCheck, "앱 감시 사용", "앱 감시 미사용");
                 ClearSelectedAppWatchStatus();
                 CaptureCurrentZone();
                 CaptureGlobalSettings();
@@ -806,7 +804,7 @@ namespace WinZoneTrigger
                 {
                     return;
                 }
-                StyleSwitchToggle(_appWatchRequireWindowCheck, "창 ON", "창 OFF");
+                StyleSwitchToggle(_appWatchRequireWindowCheck, "표시 창 필요", "표시 창 무시");
                 ClearSelectedAppWatchStatus();
                 CaptureCurrentZone();
                 CaptureGlobalSettings();
