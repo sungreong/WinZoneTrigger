@@ -27,6 +27,7 @@ namespace WinZoneTrigger
         private readonly System.Windows.Forms.Timer _scanTimer;
         private readonly System.Windows.Forms.Timer _startupRetryTimer;
         private readonly System.Windows.Forms.Timer _appWatchTimer;
+        private readonly System.Windows.Forms.Timer _logRefreshTimer;
         private AppConfig _config;
         private bool _loadingSelection;
         private bool _isExiting;
@@ -136,15 +137,19 @@ namespace WinZoneTrigger
             _scanTimer = new System.Windows.Forms.Timer();
             _startupRetryTimer = new System.Windows.Forms.Timer();
             _appWatchTimer = new System.Windows.Forms.Timer();
+            _logRefreshTimer = new System.Windows.Forms.Timer();
             _startupRetryTimer.Interval = 15000;
             _startupRetryTimer.Tick += StartupRetryTimerTick;
             _appWatchTimer.Tick += AppWatchTimerTick;
+            _logRefreshTimer.Interval = 5000;
+            _logRefreshTimer.Tick += LogRefreshTimerTick;
 
             InitializeComponent();
             ConfigureTray();
             BindConfigToControls();
             ResetScanTimer();
             ResetAppWatchTimer();
+            _logRefreshTimer.Start();
         }
 
     }

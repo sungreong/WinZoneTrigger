@@ -19,13 +19,13 @@ namespace WinZoneTrigger
         private readonly System.Windows.Forms.Timer _scanTimer;
         private readonly System.Windows.Forms.Timer _appWatchTimer;
         private AppConfig _config;
+        private DateTime _configLastWriteUtc;
         private bool _scanInProgress;
         private bool _appWatchInProgress;
 
         public BackgroundAutomationContext()
         {
-            _config = ConfigStore.Load();
-            _config.Normalize();
+            LoadConfigFromDisk("시작", false);
             _scanTimer = new System.Windows.Forms.Timer();
             _appWatchTimer = new System.Windows.Forms.Timer();
             _scanTimer.Tick += ScanTimerTick;
@@ -82,6 +82,12 @@ namespace WinZoneTrigger
 
         private void ScanTimerTick(object sender, EventArgs e)
         {
+            if (ReloadConfigIfChanged())
+            {
+                StartInitialScan();
+                return;
+            }
+
             if (_appWatchInProgress)
             {
                 DiagnosticsLog.WriteEvent("백그라운드 위치 확인 건너뜀: 앱 감시 진행 중");
@@ -93,6 +99,12 @@ namespace WinZoneTrigger
 
         private void AppWatchTimerTick(object sender, EventArgs e)
         {
+            if (ReloadConfigIfChanged())
+            {
+                StartInitialScan();
+                return;
+            }
+
             if (_scanInProgress)
             {
                 DiagnosticsLog.WriteEvent("백그라운드 앱 감시 건너뜀: 위치 확인 진행 중");
@@ -104,6 +116,7 @@ namespace WinZoneTrigger
 
         private void StartScan(bool forceScan, bool startupOnly)
         {
+            ReloadConfigIfChanged();
             if (_scanInProgress || _appWatchInProgress)
             {
                 DiagnosticsLog.WriteEvent("백그라운드 위치 확인 건너뜀: 다른 자동 작업 진행 중");
@@ -421,6 +434,46 @@ namespace WinZoneTrigger
         private static string QuoteCommandArgument(string value)
         {
             return "\"" + (value ?? "").Replace("\"", "\\\"") + "\"";
+        }
+
+        private bool ReloadConfigIfChanged()
+        {
+            try
+            {
+                DateTime lastWriteUtc = File.Exists(ConfigStore.ConfigPath)
+                    ? File.GetLastWriteTimeUtc(ConfigStore.ConfigPath)
+                    : DateTime.MinValue;
+                if (lastWriteUtc <= _configLastWriteUtc)
+                {
+                    return false;
+                }
+
+                LoadConfigFromDisk("변경 감지", true);
+                ResetTimers();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsLog.Write("백그라운드 설정 변경 확인 실패", ex);
+                return false;
+            }
+        }
+
+        private void LoadConfigFromDisk(string reason, bool resetState)
+        {
+            _config = ConfigStore.Load();
+            _config.Normalize();
+            _configLastWriteUtc = File.Exists(ConfigStore.ConfigPath)
+                ? File.GetLastWriteTimeUtc(ConfigStore.ConfigPath)
+                : DateTime.UtcNow;
+
+            if (resetState)
+            {
+                _insideZones.Clear();
+                _lastAppWatchChecks.Clear();
+            }
+
+            DiagnosticsLog.WriteEvent("백그라운드 설정 로드: " + reason + " / zones=" + _config.Zones.Count);
         }
     }
 }

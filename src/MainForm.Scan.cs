@@ -667,6 +667,8 @@ namespace WinZoneTrigger
             {
                 return;
             }
+
+            UpdateLogDisplayFromMessage(message);
         }
 
         private static List<string> SplitLines(string text)
@@ -845,6 +847,7 @@ namespace WinZoneTrigger
             _scanTimer.Stop();
             _startupRetryTimer.Stop();
             _appWatchTimer.Stop();
+            _logRefreshTimer.Stop();
 
             base.OnFormClosing(e);
         }
