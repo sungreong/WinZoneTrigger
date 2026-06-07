@@ -72,6 +72,48 @@ namespace WinZoneTrigger
                 _activeZonesLabel.Text = prefix + " · 백그라운드 " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss");
             }
 
+            if (_currentLocationLabel != null && !_currentLocationLabel.IsDisposed)
+            {
+                if (snapshot.CurrentLocation != null)
+                {
+                    _currentLocationLabel.Text = FormatLocation(snapshot.CurrentLocation)
+                        + " · 백그라운드 " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss");
+                }
+                else if (snapshot.LocationWasRequested)
+                {
+                    string error = string.IsNullOrWhiteSpace(snapshot.LocationError)
+                        ? "Windows 위치를 사용할 수 없습니다."
+                        : snapshot.LocationError;
+                    _currentLocationLabel.Text = "사용 불가: " + error
+                        + " · 백그라운드 " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss");
+                }
+                else
+                {
+                    _currentLocationLabel.Text = "백그라운드에서 좌표 감지를 요청하지 않았습니다. · "
+                        + snapshot.UpdatedAtLocal.ToString("HH:mm:ss");
+                }
+            }
+
+            if (_visibleNetworksLabel != null && !_visibleNetworksLabel.IsDisposed)
+            {
+                List<string> visibleSsids = snapshot.VisibleSsids ?? new List<string>();
+                if (!string.IsNullOrWhiteSpace(snapshot.WifiError))
+                {
+                    _visibleNetworksLabel.Text = "사용 불가: " + snapshot.WifiError
+                        + " · 백그라운드 " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss");
+                }
+                else if (visibleSsids.Count == 0)
+                {
+                    _visibleNetworksLabel.Text = "보이는 Wi-Fi가 없습니다. · 백그라운드 "
+                        + snapshot.UpdatedAtLocal.ToString("HH:mm:ss");
+                }
+                else
+                {
+                    _visibleNetworksLabel.Text = string.Join(", ", visibleSsids.Take(12).ToArray())
+                        + " · 백그라운드 " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss");
+                }
+            }
+
             InvalidateZoneLists();
             UpdateSelectedZoneSummary();
             RefreshSelectedAppWatchStatusLabel();

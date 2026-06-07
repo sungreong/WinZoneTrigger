@@ -276,7 +276,7 @@ namespace WinZoneTrigger
                 }
             }
 
-            SaveAutomationState(activeZoneIds, activeZoneNames);
+            SaveAutomationState(activeZoneIds, activeZoneNames, snapshot, visibleSsids, currentLocation);
         }
 
         private void TriggerZone(ZoneRule zone, string reason)
@@ -487,14 +487,27 @@ namespace WinZoneTrigger
             DiagnosticsLog.WriteEvent("백그라운드 설정 로드: " + reason + " / zones=" + _config.Zones.Count);
         }
 
-        private static void SaveAutomationState(List<string> activeZoneIds, List<string> activeZoneNames)
+        private static void SaveAutomationState(
+            List<string> activeZoneIds,
+            List<string> activeZoneNames,
+            ScanSnapshot snapshot,
+            HashSet<string> visibleSsids,
+            LocationInfo currentLocation)
         {
+            LocationReadResult locationResult = snapshot == null ? null : snapshot.LocationResult;
             AutomationStateStore.Save(new AutomationStateSnapshot
             {
                 UpdatedAtLocal = DateTime.Now,
                 ProcessId = Process.GetCurrentProcess().Id,
                 ActiveZoneIds = activeZoneIds ?? new List<string>(),
-                ActiveZoneNames = activeZoneNames ?? new List<string>()
+                ActiveZoneNames = activeZoneNames ?? new List<string>(),
+                CurrentLocation = currentLocation,
+                LocationWasRequested = locationResult != null && locationResult.WasRequested,
+                LocationError = locationResult == null ? "" : locationResult.Error,
+                VisibleSsids = visibleSsids == null
+                    ? new List<string>()
+                    : visibleSsids.OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToList(),
+                WifiError = snapshot == null ? "" : snapshot.WifiError
             });
         }
     }

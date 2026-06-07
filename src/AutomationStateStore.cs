@@ -12,6 +12,11 @@ namespace WinZoneTrigger
         public int ProcessId { get; set; }
         public List<string> ActiveZoneIds { get; set; }
         public List<string> ActiveZoneNames { get; set; }
+        public LocationInfo CurrentLocation { get; set; }
+        public bool LocationWasRequested { get; set; }
+        public string LocationError { get; set; }
+        public List<string> VisibleSsids { get; set; }
+        public string WifiError { get; set; }
     }
 
     internal static class AutomationStateStore
