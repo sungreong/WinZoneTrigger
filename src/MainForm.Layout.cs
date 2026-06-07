@@ -115,8 +115,6 @@ namespace WinZoneTrigger
             _zoneTabs.Multiline = true;
             _zoneTabs.SizeMode = TabSizeMode.Fixed;
             _zoneTabs.ItemSize = new Size(92, 28);
-            _zoneTabs.DrawMode = TabDrawMode.OwnerDrawFixed;
-            _zoneTabs.DrawItem += DrawZoneTab;
             left.Controls.Add(_zoneTabs, 0, 1);
 
             _allZonesTab = new TabPage("전체");
@@ -187,10 +185,8 @@ namespace WinZoneTrigger
 
             _detailTabs = new TabControl();
             _detailTabs.Dock = DockStyle.Fill;
-            _detailTabs.DrawMode = TabDrawMode.OwnerDrawFixed;
             _detailTabs.SizeMode = TabSizeMode.Fixed;
             _detailTabs.ItemSize = new Size(116, 30);
-            _detailTabs.DrawItem += DrawDetailTab;
             detailShell.Controls.Add(_detailTabs, 0, 1);
 
             _conditionTable = CreateDetailTable();

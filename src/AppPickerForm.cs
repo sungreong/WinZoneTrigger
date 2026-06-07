@@ -104,11 +104,9 @@ namespace WinZoneTrigger
             _resultList = new ListBox();
             _resultList.Dock = DockStyle.Fill;
             _resultList.IntegralHeight = false;
-            _resultList.DrawMode = DrawMode.OwnerDrawFixed;
-            _resultList.ItemHeight = 48;
+            _resultList.DrawMode = DrawMode.Normal;
             _resultList.SelectionMode = SelectionMode.MultiExtended;
             _resultList.Margin = new Padding(0, 0, 0, 12);
-            _resultList.DrawItem += DrawCandidateItem;
             _resultList.SelectedIndexChanged += delegate { UpdateAddButton(); };
             _resultList.DoubleClick += delegate { AcceptSelection(); };
             root.Controls.Add(_resultList, 0, 3);
@@ -188,42 +186,6 @@ namespace WinZoneTrigger
                 ? "검색 가능한 앱 " + _candidates.Count + "개 표시"
                 : "'" + term + "' 검색 결과 " + _candidates.Count + "개";
             UpdateAddButton();
-        }
-
-        private void DrawCandidateItem(object sender, DrawItemEventArgs e)
-        {
-            if (e.Index < 0 || e.Index >= _resultList.Items.Count)
-            {
-                return;
-            }
-
-            AppSearchCandidate candidate = _resultList.Items[e.Index] as AppSearchCandidate;
-            if (candidate == null)
-            {
-                e.DrawBackground();
-                return;
-            }
-
-            bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-            Color background = selected ? Color.FromArgb(20, 91, 69) : Color.FromArgb(253, 253, 249);
-            Color nameColor = selected ? Color.White : Color.FromArgb(35, 45, 47);
-            Color targetColor = selected ? Color.FromArgb(226, 239, 230) : Color.FromArgb(97, 111, 103);
-
-            using (SolidBrush brush = new SolidBrush(background))
-            {
-                e.Graphics.FillRectangle(brush, e.Bounds);
-            }
-
-            Rectangle nameRect = new Rectangle(e.Bounds.Left + 10, e.Bounds.Top + 6, e.Bounds.Width - 20, 18);
-            Rectangle targetRect = new Rectangle(e.Bounds.Left + 10, e.Bounds.Top + 25, e.Bounds.Width - 20, 17);
-            string target = BuildCandidateTargetText(candidate);
-
-            using (Font bold = new Font(Font, FontStyle.Bold))
-            {
-                TextRenderer.DrawText(e.Graphics, candidate.Name, bold, nameRect, nameColor, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-            }
-            TextRenderer.DrawText(e.Graphics, target, Font, targetRect, targetColor, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-            e.DrawFocusRectangle();
         }
 
         private static string BuildCandidateTargetText(AppSearchCandidate candidate)

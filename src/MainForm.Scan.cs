@@ -760,6 +760,7 @@ namespace WinZoneTrigger
                 try
                 {
                     _trayIcon.Visible = false;
+                    AppIcons.DisposeIcon(_trayIcon);
                     _trayIcon.Dispose();
                 }
                 catch (Exception ex)
@@ -767,6 +768,15 @@ namespace WinZoneTrigger
                     DiagnosticsLog.Write("트레이 아이콘 정리 실패", ex);
                 }
                 _trayIcon = null;
+            }
+
+            try
+            {
+                AppIcons.DisposeIcon(this);
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsLog.Write("폼 아이콘 정리 실패", ex);
             }
 
             base.OnFormClosing(e);

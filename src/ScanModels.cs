@@ -31,6 +31,13 @@ namespace WinZoneTrigger
         public string AppId { get; set; }
         public string Source { get; set; }
         public string SearchText { get; set; }
+
+        public override string ToString()
+        {
+            string name = string.IsNullOrWhiteSpace(Name) ? "이름 없는 앱" : Name;
+            string target = !string.IsNullOrWhiteSpace(AppId) ? AppId : Target;
+            return string.IsNullOrWhiteSpace(target) ? name : name + " · " + target;
+        }
     }
 
     internal sealed class ScanSnapshot

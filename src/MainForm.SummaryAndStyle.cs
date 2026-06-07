@@ -505,138 +505,17 @@ namespace WinZoneTrigger
             }
         }
 
-        private void DrawDetailTab(object sender, DrawItemEventArgs e)
-        {
-            TabControl tabs = sender as TabControl;
-            if (tabs == null || e.Index < 0 || e.Index >= tabs.TabPages.Count)
-            {
-                return;
-            }
-
-            bool selected = e.Index == tabs.SelectedIndex;
-            Rectangle bounds = tabs.GetTabRect(e.Index);
-            bounds.Inflate(-2, -2);
-
-            Color background = selected ? UiAccent : UiSurfaceMuted;
-            Color foreground = selected ? Color.White : UiTextMuted;
-            using (SolidBrush brush = new SolidBrush(background))
-            {
-                e.Graphics.FillRectangle(brush, bounds);
-            }
-
-            using (Pen pen = new Pen(selected ? UiAccentDark : UiBorder))
-            {
-                e.Graphics.DrawRectangle(pen, bounds.Left, bounds.Top, bounds.Width - 1, bounds.Height - 1);
-            }
-
-            TextRenderer.DrawText(
-                e.Graphics,
-                tabs.TabPages[e.Index].Text,
-                Font,
-                bounds,
-                foreground,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-        }
-
-        private void DrawZoneTab(object sender, DrawItemEventArgs e)
-        {
-            TabControl tabs = sender as TabControl;
-            if (tabs == null || e.Index < 0 || e.Index >= tabs.TabPages.Count)
-            {
-                return;
-            }
-
-            bool selected = e.Index == tabs.SelectedIndex;
-            Rectangle bounds = tabs.GetTabRect(e.Index);
-            bounds.Inflate(-2, -2);
-
-            Color background = selected ? UiAccentDark : UiSurfaceMuted;
-            Color foreground = selected ? Color.White : UiTextMuted;
-            using (SolidBrush brush = new SolidBrush(background))
-            {
-                e.Graphics.FillRectangle(brush, bounds);
-            }
-
-            using (Pen pen = new Pen(selected ? UiAccentDark : UiBorder))
-            {
-                e.Graphics.DrawRectangle(pen, bounds.Left, bounds.Top, bounds.Width - 1, bounds.Height - 1);
-            }
-
-            TextRenderer.DrawText(
-                e.Graphics,
-                tabs.TabPages[e.Index].Text,
-                Font,
-                bounds,
-                foreground,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-        }
-
         private ListBox CreateZoneListBox()
         {
             ListBox listBox = new ListBox();
             listBox.Dock = DockStyle.Fill;
             listBox.IntegralHeight = false;
-            listBox.DrawMode = DrawMode.OwnerDrawFixed;
-            listBox.ItemHeight = 44;
+            listBox.DrawMode = DrawMode.Normal;
             listBox.BorderStyle = BorderStyle.FixedSingle;
             listBox.BackColor = UiSurface;
             listBox.ForeColor = UiText;
             listBox.SelectedIndexChanged += ZoneListSelectedIndexChanged;
-            listBox.DrawItem += DrawZoneListItem;
             return listBox;
-        }
-
-        private void DrawZoneListItem(object sender, DrawItemEventArgs e)
-        {
-            if (e.Index < 0)
-            {
-                return;
-            }
-
-            ListBox list = (ListBox)sender;
-            ZoneListItem item = list.Items[e.Index] as ZoneListItem;
-            if (item == null)
-            {
-                e.DrawBackground();
-                return;
-            }
-
-            bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-            bool matched = IsZoneActive(item.Zone);
-            bool operating = item.Zone.Enabled;
-            Color background = selected
-                ? UiAccentDark
-                : matched
-                    ? UiAccentSoft
-                    : operating
-                        ? UiSurface
-                        : UiSurfaceMuted;
-            Color foreground = selected ? Color.White : UiText;
-            Color metaColor = selected ? Color.FromArgb(226, 239, 230) : UiTextMuted;
-
-            using (SolidBrush brush = new SolidBrush(background))
-            {
-                e.Graphics.FillRectangle(brush, e.Bounds);
-            }
-
-            if (matched && !selected)
-            {
-                using (SolidBrush accentBrush = new SolidBrush(UiAccent))
-                {
-                    e.Graphics.FillRectangle(accentBrush, e.Bounds.Left, e.Bounds.Top, 4, e.Bounds.Height);
-                }
-            }
-
-            using (Pen linePen = new Pen(UiBorder))
-            {
-                e.Graphics.DrawLine(linePen, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
-            }
-
-            Rectangle textRect = new Rectangle(e.Bounds.Left + 12, e.Bounds.Top + 6, e.Bounds.Width - 18, 17);
-            Rectangle metaRect = new Rectangle(e.Bounds.Left + 12, e.Bounds.Top + 24, e.Bounds.Width - 18, 15);
-            TextRenderer.DrawText(e.Graphics, item.Zone.Name, Font, textRect, foreground, TextFormatFlags.EndEllipsis | TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
-            TextRenderer.DrawText(e.Graphics, item.MetadataText, Font, metaRect, metaColor, TextFormatFlags.EndEllipsis | TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
-            e.DrawFocusRectangle();
         }
 
         private Label CreateInlineLabel(string text)
