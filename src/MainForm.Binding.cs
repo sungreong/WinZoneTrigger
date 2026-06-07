@@ -747,6 +747,19 @@ namespace WinZoneTrigger
 
         private void InvalidateZoneLists()
         {
+            bool wasLoading = _loadingSelection;
+            _loadingSelection = true;
+            try
+            {
+                RefreshZoneListItems(_allZoneList);
+                RefreshZoneListItems(_activeZoneList);
+                RefreshZoneListItems(_inactiveZoneList);
+            }
+            finally
+            {
+                _loadingSelection = wasLoading;
+            }
+
             if (_allZoneList != null)
             {
                 _allZoneList.Invalidate();
@@ -758,6 +771,37 @@ namespace WinZoneTrigger
             if (_inactiveZoneList != null)
             {
                 _inactiveZoneList.Invalidate();
+            }
+        }
+
+        private void RefreshZoneListItems(ListBox list)
+        {
+            if (list == null || list.Items.Count == 0)
+            {
+                return;
+            }
+
+            int selectedIndex = list.SelectedIndex;
+            list.BeginUpdate();
+            try
+            {
+                for (int i = 0; i < list.Items.Count; i++)
+                {
+                    ZoneListItem item = list.Items[i] as ZoneListItem;
+                    if (item != null)
+                    {
+                        list.Items[i] = new ZoneListItem(item.Zone, this);
+                    }
+                }
+
+                if (selectedIndex >= 0 && selectedIndex < list.Items.Count)
+                {
+                    list.SelectedIndex = selectedIndex;
+                }
+            }
+            finally
+            {
+                list.EndUpdate();
             }
         }
 
