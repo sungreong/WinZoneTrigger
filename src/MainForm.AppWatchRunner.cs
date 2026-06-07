@@ -191,9 +191,23 @@ namespace WinZoneTrigger
                 return;
             }
 
+            if (_scanInProgress)
+            {
+                AppendLog(reason + " 건너뜀: 위치 조건 확인이 아직 진행 중입니다.");
+                return;
+            }
+
             int runVersion = _appWatchRunVersion;
             _appWatchInProgress = true;
-            UpdateAppWatchStatusLabel(reason + " 중입니다... (" + FormatAppWatchTimestamp(DateTime.Now) + ")");
+            bool updateUi = showMessage;
+            if (updateUi)
+            {
+                UpdateAppWatchStatusLabel(reason + " 중입니다... (" + FormatAppWatchTimestamp(DateTime.Now) + ")");
+            }
+            else
+            {
+                AppendLog(reason + " 시작: " + targets.Count + "개 항목");
+            }
 
             Task.Factory.StartNew(delegate
             {
@@ -265,14 +279,20 @@ namespace WinZoneTrigger
                     if (runVersion != _appWatchRunVersion)
                     {
                         AppendLog(reason + " 결과 무시: 앱 감시 설정이 변경되었습니다.");
-                        RefreshSelectedAppWatchStatusLabel();
+                        if (updateUi)
+                        {
+                            RefreshSelectedAppWatchStatusLabel();
+                        }
                         return;
                     }
 
                     if (task.IsFaulted)
                     {
                         string message = task.Exception == null ? "알 수 없는 앱 감시 오류입니다." : task.Exception.GetBaseException().Message;
-                        UpdateAppWatchStatusLabel(message);
+                        if (updateUi)
+                        {
+                            UpdateAppWatchStatusLabel(message);
+                        }
                         AppendLog(reason + " 실패: " + message);
                         if (showMessage)
                         {
@@ -299,7 +319,8 @@ namespace WinZoneTrigger
                         }
 
                         AppendLog(reason + " 결과(" + zoneResult.ZoneName + " · " + zoneResult.ItemName + "): " + displaySummary);
-                        if (string.Equals(_currentZoneId, zoneResult.ZoneId, StringComparison.OrdinalIgnoreCase)
+                        if (updateUi
+                            && string.Equals(_currentZoneId, zoneResult.ZoneId, StringComparison.OrdinalIgnoreCase)
                             && string.Equals(_selectedAppWatchItemId, zoneResult.ItemId, StringComparison.OrdinalIgnoreCase))
                         {
                             UpdateAppWatchStatusLabel(displaySummary);

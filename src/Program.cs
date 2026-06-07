@@ -50,6 +50,8 @@ namespace WinZoneTrigger
                 DiagnosticsLog.WriteEvent("앱 종료: ApplicationExit");
             };
 
+            ConfigureCrashDumps();
+
             List<ProcessParentInfo> parentChain = ProcessDiagnostics.GetParentChain(Process.GetCurrentProcess().Id, 8);
             DiagnosticsLog.WriteEvent("앱 시작: pid=" + Process.GetCurrentProcess().Id
                 + " / exe=" + Application.ExecutablePath
@@ -63,10 +65,17 @@ namespace WinZoneTrigger
 
             try
             {
-                Application.EnableVisualStyles();
-                Application.SetCompatibleTextRenderingDefault(false);
                 bool startMinimized = args != null && args.Any(a => string.Equals(a, "--minimized", StringComparison.OrdinalIgnoreCase));
                 bool startedFromWindowsStartup = args != null && args.Any(a => string.Equals(a, "--startup", StringComparison.OrdinalIgnoreCase));
+                if (startMinimized)
+                {
+                    DiagnosticsLog.WriteEvent("최소화 시작: 백그라운드 자동 실행 컨텍스트를 사용합니다.");
+                    Application.Run(new BackgroundAutomationContext());
+                    return 0;
+                }
+
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
                 Application.Run(new MainForm(startMinimized, startedFromWindowsStartup));
                 return 0;
             }
@@ -120,6 +129,34 @@ namespace WinZoneTrigger
             {
                 _singleInstanceMutex.Dispose();
                 _singleInstanceMutex = null;
+            }
+        }
+
+        private static void ConfigureCrashDumps()
+        {
+            try
+            {
+                string dumpFolder = Path.Combine(ConfigStore.ConfigDirectory, "dumps");
+                Directory.CreateDirectory(dumpFolder);
+
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(
+                    @"Software\Microsoft\Windows\Windows Error Reporting\LocalDumps\WinZoneTrigger.exe"))
+                {
+                    if (key == null)
+                    {
+                        return;
+                    }
+
+                    key.SetValue("DumpFolder", dumpFolder, RegistryValueKind.ExpandString);
+                    key.SetValue("DumpCount", 5, RegistryValueKind.DWord);
+                    key.SetValue("DumpType", 2, RegistryValueKind.DWord);
+                }
+
+                DiagnosticsLog.WriteEvent("크래시 덤프 설정: " + dumpFolder);
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsLog.Write("크래시 덤프 설정 실패", ex);
             }
         }
 

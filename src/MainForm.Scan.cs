@@ -25,6 +25,12 @@ namespace WinZoneTrigger
                 return;
             }
 
+            if (_appWatchInProgress)
+            {
+                AppendLog("위치 조건 확인 건너뜀: 앱 감시 확인이 아직 진행 중입니다.");
+                return;
+            }
+
             CaptureCurrentZone();
             CaptureGlobalSettings();
             if (HasZoneConditionScanZones())
@@ -37,6 +43,12 @@ namespace WinZoneTrigger
         {
             if (IsShuttingDown())
             {
+                return;
+            }
+
+            if (_scanInProgress)
+            {
+                AppendLog("앱 감시 건너뜀: 위치 조건 확인이 아직 진행 중입니다.");
                 return;
             }
 
@@ -122,6 +134,12 @@ namespace WinZoneTrigger
 
             if (_scanInProgress)
             {
+                return;
+            }
+
+            if (_appWatchInProgress)
+            {
+                AppendLog("위치 조건 확인 건너뜀: 앱 감시 확인이 아직 진행 중입니다.");
                 return;
             }
 

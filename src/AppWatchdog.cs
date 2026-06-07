@@ -46,29 +46,6 @@ namespace WinZoneTrigger
 
     internal static class AppWatchdog
     {
-        private const int SW_RESTORE = 9;
-        private const int SW_SHOW = 5;
-
-        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-
-        [DllImport("user32.dll")]
-        private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-
-        [DllImport("user32.dll")]
-        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProcessId);
-
-        [DllImport("user32.dll")]
-        private static extern bool IsWindowVisible(IntPtr hWnd);
-
-        [DllImport("user32.dll")]
-        private static extern bool IsIconic(IntPtr hWnd);
-
-        [DllImport("user32.dll")]
-        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-
-        [DllImport("user32.dll")]
-        private static extern bool SetForegroundWindow(IntPtr hWnd);
-
         public static string InferProcessName(string target)
         {
             return NormalizeProcessName(target);
@@ -155,69 +132,6 @@ namespace WinZoneTrigger
             }
 
             return appId.Trim();
-        }
-
-        private static WindowScanResult FindTopLevelWindows(Process[] processes)
-        {
-            WindowScanResult result = new WindowScanResult();
-            if (processes == null || processes.Length == 0)
-            {
-                return result;
-            }
-
-            HashSet<int> processIds = new HashSet<int>();
-            foreach (Process process in processes)
-            {
-                try
-                {
-                    processIds.Add(process.Id);
-                }
-                catch
-                {
-                }
-            }
-
-            if (processIds.Count == 0)
-            {
-                return result;
-            }
-
-            EnumWindows(delegate(IntPtr windowHandle, IntPtr lParam)
-            {
-                int windowProcessId;
-                GetWindowThreadProcessId(windowHandle, out windowProcessId);
-                if (!processIds.Contains(windowProcessId))
-                {
-                    return true;
-                }
-
-                result.WindowCount++;
-                if (result.WindowHandle == IntPtr.Zero)
-                {
-                    result.WindowHandle = windowHandle;
-                }
-
-                if (IsWindowVisible(windowHandle))
-                {
-                    result.VisibleWindowCount++;
-                    if (result.VisibleWindowHandle == IntPtr.Zero)
-                    {
-                        result.VisibleWindowHandle = windowHandle;
-                    }
-                }
-
-                return true;
-            }, IntPtr.Zero);
-
-            return result;
-        }
-
-        private sealed class WindowScanResult
-        {
-            public int WindowCount { get; set; }
-            public int VisibleWindowCount { get; set; }
-            public IntPtr WindowHandle { get; set; }
-            public IntPtr VisibleWindowHandle { get; set; }
         }
 
         public static AppWatchCheckResult Check(string processName)
@@ -347,21 +261,5 @@ namespace WinZoneTrigger
             return "실행 요청 완료, 아직 프로세스 미확인: " + result.ProcessName;
         }
 
-        private static void TryBringWindowToFront(IntPtr windowHandle)
-        {
-            if (windowHandle == IntPtr.Zero)
-            {
-                return;
-            }
-
-            try
-            {
-                ShowWindow(windowHandle, IsIconic(windowHandle) ? SW_RESTORE : SW_SHOW);
-                SetForegroundWindow(windowHandle);
-            }
-            catch
-            {
-            }
-        }
     }
 }
