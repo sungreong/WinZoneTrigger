@@ -39,6 +39,7 @@ namespace WinZoneTrigger
         private bool _lastScanHadActiveZone;
         private int _appWatchRunVersion;
         private DateTime? _appWatchTimerStartedAtLocal;
+        private DateTime _automationStateLastWriteUtc;
         private string _currentZoneId;
 
         private TabControl _zoneTabs;

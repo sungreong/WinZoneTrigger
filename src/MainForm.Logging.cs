@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -9,7 +10,71 @@ namespace WinZoneTrigger
     {
         private void LogRefreshTimerTick(object sender, EventArgs e)
         {
+            RefreshAutomationStateFromFile();
             RefreshLogDisplayFromFile();
+        }
+
+        private void RefreshAutomationStateFromFile()
+        {
+            if (IsShuttingDown())
+            {
+                return;
+            }
+
+            try
+            {
+                if (!File.Exists(AutomationStateStore.StatePath))
+                {
+                    return;
+                }
+
+                DateTime lastWriteUtc = File.GetLastWriteTimeUtc(AutomationStateStore.StatePath);
+                if (lastWriteUtc <= _automationStateLastWriteUtc)
+                {
+                    return;
+                }
+
+                AutomationStateSnapshot snapshot = AutomationStateStore.Load();
+                _automationStateLastWriteUtc = lastWriteUtc;
+                if (snapshot == null)
+                {
+                    return;
+                }
+
+                ApplyAutomationState(snapshot);
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsLog.Write("자동화 상태 표시 갱신 실패", ex);
+            }
+        }
+
+        private void ApplyAutomationState(AutomationStateSnapshot snapshot)
+        {
+            HashSet<string> activeIds = new HashSet<string>(
+                snapshot.ActiveZoneIds ?? new List<string>(),
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach (ZoneRule zone in _config.Zones)
+            {
+                if (zone == null || string.IsNullOrWhiteSpace(zone.Id))
+                {
+                    continue;
+                }
+
+                _insideZones[zone.Id] = activeIds.Contains(zone.Id);
+            }
+
+            List<string> activeNames = snapshot.ActiveZoneNames ?? new List<string>();
+            if (_activeZonesLabel != null && !_activeZonesLabel.IsDisposed)
+            {
+                string prefix = activeNames.Count == 0 ? "없음" : string.Join(", ", activeNames.ToArray());
+                _activeZonesLabel.Text = prefix + " · 백그라운드 " + snapshot.UpdatedAtLocal.ToString("HH:mm:ss");
+            }
+
+            InvalidateZoneLists();
+            UpdateSelectedZoneSummary();
+            RefreshSelectedAppWatchStatusLabel();
         }
 
         private void RefreshLogDisplayFromFile()

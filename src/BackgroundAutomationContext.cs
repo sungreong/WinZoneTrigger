@@ -238,6 +238,9 @@ namespace WinZoneTrigger
                 DiagnosticsLog.WriteEvent("백그라운드 위치 사용 불가: " + snapshot.LocationResult.Error);
             }
 
+            List<string> activeZoneIds = new List<string>();
+            List<string> activeZoneNames = new List<string>();
+
             foreach (ZoneRule zone in _config.Zones)
             {
                 zone.Normalize();
@@ -265,7 +268,15 @@ namespace WinZoneTrigger
                     _insideZones[zone.Id] = false;
                     DiagnosticsLog.WriteEvent("백그라운드 위치 이탈: " + zone.Name);
                 }
+
+                if (IsZoneActive(zone))
+                {
+                    activeZoneIds.Add(zone.Id);
+                    activeZoneNames.Add(zone.Name);
+                }
             }
+
+            SaveAutomationState(activeZoneIds, activeZoneNames);
         }
 
         private void TriggerZone(ZoneRule zone, string reason)
@@ -474,6 +485,17 @@ namespace WinZoneTrigger
             }
 
             DiagnosticsLog.WriteEvent("백그라운드 설정 로드: " + reason + " / zones=" + _config.Zones.Count);
+        }
+
+        private static void SaveAutomationState(List<string> activeZoneIds, List<string> activeZoneNames)
+        {
+            AutomationStateStore.Save(new AutomationStateSnapshot
+            {
+                UpdatedAtLocal = DateTime.Now,
+                ProcessId = Process.GetCurrentProcess().Id,
+                ActiveZoneIds = activeZoneIds ?? new List<string>(),
+                ActiveZoneNames = activeZoneNames ?? new List<string>()
+            });
         }
     }
 }
