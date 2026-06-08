@@ -53,15 +53,28 @@ namespace WinZoneTrigger
             TableLayoutPanel root = new TableLayoutPanel();
             root.Dock = DockStyle.Fill;
             root.Padding = new Padding(16);
-            root.RowCount = 6;
+            root.RowCount = 2;
             root.ColumnCount = 1;
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             Controls.Add(root);
+
+            Panel contentPanel = new Panel();
+            contentPanel.Dock = DockStyle.Fill;
+            contentPanel.AutoScroll = true;
+            contentPanel.Margin = new Padding(0);
+            root.Controls.Add(contentPanel, 0, 0);
+
+            TableLayoutPanel content = new TableLayoutPanel();
+            content.AutoSize = true;
+            content.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            content.ColumnCount = 1;
+            content.RowCount = 0;
+            content.Dock = DockStyle.Top;
+            content.Margin = new Padding(0);
+            contentPanel.Controls.Add(content);
+            contentPanel.Resize += delegate { content.Width = Math.Max(0, contentPanel.ClientSize.Width - 1); };
+            content.Width = Math.Max(0, contentPanel.ClientSize.Width - 1);
 
             Label title = new Label();
             title.Text = "앱 설정";
@@ -69,7 +82,7 @@ namespace WinZoneTrigger
             title.Font = new Font(Font.FontFamily, 12F, FontStyle.Bold, GraphicsUnit.Point);
             title.ForeColor = Color.FromArgb(20, 91, 69);
             title.Margin = new Padding(0, 0, 0, 12);
-            root.Controls.Add(title, 0, 0);
+            content.Controls.Add(title, 0, content.RowCount++);
 
             TableLayoutPanel startupPanel = CreateSection("시작 동작");
             _startupCheck = new CheckBox();
@@ -85,7 +98,7 @@ namespace WinZoneTrigger
             _startMinimizedCheck.AutoSize = true;
             _startMinimizedCheck.Margin = new Padding(0, 0, 0, 6);
             startupPanel.Controls.Add(_startMinimizedCheck, 0, startupPanel.RowCount++);
-            root.Controls.Add(startupPanel, 0, 1);
+            content.Controls.Add(startupPanel, 0, content.RowCount++);
 
             TableLayoutPanel powerPanel = CreateSection("전원");
             _preventSleepCheck = new CheckBox();
@@ -95,7 +108,7 @@ namespace WinZoneTrigger
             _preventSleepCheck.Margin = new Padding(0, 4, 0, 4);
             powerPanel.Controls.Add(_preventSleepCheck, 0, powerPanel.RowCount++);
             powerPanel.Controls.Add(CreateNoteLine("자동 절전만 방지합니다. 직접 전원 동작은 그대로 진행됩니다."), 0, powerPanel.RowCount++);
-            root.Controls.Add(powerPanel, 0, 2);
+            content.Controls.Add(powerPanel, 0, content.RowCount++);
 
             TableLayoutPanel trayPanel = CreateSection("트레이");
             _trayIconCheck = new CheckBox();
@@ -105,7 +118,7 @@ namespace WinZoneTrigger
             _trayIconCheck.Margin = new Padding(0, 4, 0, 4);
             trayPanel.Controls.Add(_trayIconCheck, 0, trayPanel.RowCount++);
             trayPanel.Controls.Add(CreateNoteLine("상태 확인과 설정 열기만 제공합니다. 풍선 알림은 사용하지 않습니다."), 0, trayPanel.RowCount++);
-            root.Controls.Add(trayPanel, 0, 3);
+            content.Controls.Add(trayPanel, 0, content.RowCount++);
 
             TableLayoutPanel diagnosticsPanel = CreateSection("진단");
             diagnosticsPanel.Controls.Add(CreateStatusLine("트레이", "설정에서 선택 가능"), 0, diagnosticsPanel.RowCount++);
@@ -126,7 +139,7 @@ namespace WinZoneTrigger
             dumpFolderButton.Click += delegate { OpenFolder(Path.Combine(ConfigStore.ConfigDirectory, "dumps")); };
             folderButtons.Controls.Add(dumpFolderButton);
             diagnosticsPanel.Controls.Add(folderButtons, 0, diagnosticsPanel.RowCount++);
-            root.Controls.Add(diagnosticsPanel, 0, 4);
+            content.Controls.Add(diagnosticsPanel, 0, content.RowCount++);
 
             FlowLayoutPanel buttons = new FlowLayoutPanel();
             buttons.Dock = DockStyle.Fill;
@@ -139,7 +152,7 @@ namespace WinZoneTrigger
             cancelButton.DialogResult = DialogResult.Cancel;
             buttons.Controls.Add(saveButton);
             buttons.Controls.Add(cancelButton);
-            root.Controls.Add(buttons, 0, 5);
+            root.Controls.Add(buttons, 0, 1);
 
             AcceptButton = saveButton;
             CancelButton = cancelButton;
