@@ -81,9 +81,9 @@ namespace WinZoneTrigger
             _preventSleepCheck.Text = "자동 감시 중 Windows 자동 절전 방지";
             _preventSleepCheck.Checked = preventSleepWhileAutomationActive;
             _preventSleepCheck.AutoSize = true;
-            _preventSleepCheck.Margin = new Padding(0, 4, 0, 7);
+            _preventSleepCheck.Margin = new Padding(0, 4, 0, 4);
             powerPanel.Controls.Add(_preventSleepCheck, 0, powerPanel.RowCount++);
-            powerPanel.Controls.Add(CreateStatusLine("동작", "화면은 꺼질 수 있습니다. 직접 누른 절전/전원 끄기는 막지 않습니다."), 0, powerPanel.RowCount++);
+            powerPanel.Controls.Add(CreateNoteLine("자동 절전만 방지합니다. 직접 전원 동작은 그대로 진행됩니다."), 0, powerPanel.RowCount++);
             root.Controls.Add(powerPanel, 0, 2);
 
             TableLayoutPanel diagnosticsPanel = CreateSection("진단");
@@ -171,6 +171,17 @@ namespace WinZoneTrigger
             value.Margin = new Padding(0, 2, 0, 2);
             row.Controls.Add(value, 1, 0);
             return row;
+        }
+
+        private Control CreateNoteLine(string text)
+        {
+            Label note = new Label();
+            note.Text = text ?? "";
+            note.AutoSize = true;
+            note.MaximumSize = new Size(470, 0);
+            note.ForeColor = Color.FromArgb(97, 111, 103);
+            note.Margin = new Padding(21, 0, 0, 7);
+            return note;
         }
 
         private Button CreateButton(string text)
