@@ -86,41 +86,90 @@ namespace WinZoneTrigger
             Button saveSelectedButton = CreateButton("저장");
             SetFixedButtonSize(saveSelectedButton, 82, 34);
             saveSelectedButton.Click += delegate { SaveFromUi(); };
-            buttons.Controls.Add(saveSelectedButton);
-
-            Button operateButton = CreateButton("운영하기");
-            SetFixedButtonSize(operateButton, 100, 34);
-            operateButton.Click += delegate { SetSelectedZoneOperating(true); };
-            buttons.Controls.Add(operateButton);
-
-            Button stopOperatingButton = CreateButton("운영 중지");
-            SetFixedButtonSize(stopOperatingButton, 100, 34);
-            stopOperatingButton.Click += delegate { SetSelectedZoneOperating(false); };
-            buttons.Controls.Add(stopOperatingButton);
-
-            Button testConditionButton = CreateButton("테스트해보기");
-            SetFixedButtonSize(testConditionButton, 118, 34);
-            testConditionButton.Click += delegate { TestSelectedZoneCondition(); };
-            buttons.Controls.Add(testConditionButton);
-
-            Button testActionsButton = CreateButton("동작 테스트");
-            SetFixedButtonSize(testActionsButton, 110, 34);
-            testActionsButton.Click += delegate { TestSelectedZoneActions(); };
-            buttons.Controls.Add(testActionsButton);
 
             Button refreshScreenButton = CreateButton("화면 갱신");
             SetFixedButtonSize(refreshScreenButton, 100, 34);
             refreshScreenButton.Click += delegate { RefreshStatusAndLogsNow(); };
-            buttons.Controls.Add(refreshScreenButton);
+
+            Button testConditionButton = CreateButton("테스트해보기");
+            SetFixedButtonSize(testConditionButton, 118, 34);
+            testConditionButton.Click += delegate { TestSelectedZoneCondition(); };
+
+            Button testActionsButton = CreateButton("동작 테스트");
+            SetFixedButtonSize(testActionsButton, 110, 34);
+            testActionsButton.Click += delegate { TestSelectedZoneActions(); };
 
             Button openConfigButton = CreateButton("설정 폴더");
             SetFixedButtonSize(openConfigButton, 100, 34);
             openConfigButton.Click += delegate { OpenConfigFolder(); };
-            buttons.Controls.Add(openConfigButton);
+
+            Button operateButton = CreateButton("운영하기");
+            SetFixedButtonSize(operateButton, 100, 34);
+            operateButton.Click += delegate { SetSelectedZoneOperating(true); };
+
+            Button stopOperatingButton = CreateButton("운영 중지");
+            SetFixedButtonSize(stopOperatingButton, 100, 34);
+            stopOperatingButton.Click += delegate { ConfirmStopSelectedZoneOperating(); };
+
+            FlowLayoutPanel saveGroup = CreateSummaryButtonGroup();
+            saveGroup.Controls.Add(saveSelectedButton);
+            saveGroup.Controls.Add(refreshScreenButton);
+            buttons.Controls.Add(saveGroup);
+
+            FlowLayoutPanel testGroup = CreateSummaryButtonGroup();
+            testGroup.Controls.Add(testConditionButton);
+            testGroup.Controls.Add(testActionsButton);
+            buttons.Controls.Add(testGroup);
+
+            FlowLayoutPanel configGroup = CreateSummaryButtonGroup();
+            configGroup.Controls.Add(openConfigButton);
+            buttons.Controls.Add(configGroup);
+
+            FlowLayoutPanel operatingGroup = CreateSummaryButtonGroup();
+            operatingGroup.Margin = new Padding(16, 0, 0, 0);
+            operatingGroup.Controls.Add(operateButton);
+            operatingGroup.Controls.Add(stopOperatingButton);
+            buttons.Controls.Add(operatingGroup);
 
             summary.Controls.Add(textStack, 0, 0);
             summary.Controls.Add(buttons, 0, 1);
             return summary;
+        }
+
+        private FlowLayoutPanel CreateSummaryButtonGroup()
+        {
+            FlowLayoutPanel group = new FlowLayoutPanel();
+            group.AutoSize = true;
+            group.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            group.WrapContents = false;
+            group.FlowDirection = FlowDirection.LeftToRight;
+            group.Margin = new Padding(0, 0, 12, 4);
+            group.Padding = new Padding(0);
+            group.BackColor = UiSurfaceMuted;
+            return group;
+        }
+
+        private void ConfirmStopSelectedZoneOperating()
+        {
+            ZoneRule selected = GetSelectedZone();
+            if (selected == null)
+            {
+                SetSelectedZoneOperating(false);
+                return;
+            }
+
+            DialogResult result = MessageBox.Show(
+                this,
+                selected.Name + " 위치 운영을 중지할까요? 자동 실행과 앱 감시가 멈출 수 있습니다.",
+                "운영 중지 확인",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2);
+
+            if (result == DialogResult.Yes)
+            {
+                SetSelectedZoneOperating(false);
+            }
         }
 
         private TableLayoutPanel CreateDetailTable()
@@ -511,9 +560,29 @@ namespace WinZoneTrigger
                 return;
             }
 
-            button.FlatStyle = FlatStyle.Standard;
-            button.UseVisualStyleBackColor = true;
-            button.ForeColor = SystemColors.ControlText;
+            button.FlatStyle = FlatStyle.Flat;
+            button.UseVisualStyleBackColor = false;
+            button.FlatAppearance.BorderSize = 1;
+
+            if (tone == ButtonTone.Primary)
+            {
+                button.BackColor = UiAccent;
+                button.ForeColor = Color.White;
+                button.FlatAppearance.BorderColor = UiAccentDark;
+                return;
+            }
+
+            if (tone == ButtonTone.Danger)
+            {
+                button.BackColor = Color.FromArgb(255, 245, 244);
+                button.ForeColor = UiDanger;
+                button.FlatAppearance.BorderColor = UiDanger;
+                return;
+            }
+
+            button.BackColor = UiSurface;
+            button.ForeColor = UiText;
+            button.FlatAppearance.BorderColor = UiBorder;
         }
 
         private ListBox CreateZoneListBox()

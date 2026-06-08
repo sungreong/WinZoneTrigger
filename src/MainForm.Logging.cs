@@ -24,7 +24,8 @@ namespace WinZoneTrigger
             RefreshLogDisplayFromFile();
             RefreshAutomationStateFromFile(true);
             RefreshSelectedAppWatchStatusLabel();
-            AppendLog("상태/로그를 수동으로 갱신했습니다.");
+            AppendLog("화면을 수동으로 갱신했습니다.");
+            RefreshSelectedAppWatchStatusNow();
         }
 
         private void RefreshAutomationStateFromFile(bool force)
@@ -276,6 +277,18 @@ namespace WinZoneTrigger
                 _logText.SelectionStart = _logText.TextLength;
                 _logText.ScrollToCaret();
             }
+        }
+
+        private void RefreshSelectedAppWatchStatusNow()
+        {
+            ZoneRule selected = GetSelectedZone();
+            AppWatchItem item = GetSelectedAppWatchItem(selected);
+            if (selected == null || item == null)
+            {
+                return;
+            }
+
+            RunAppWatchCheck(selected.Clone(), item.Clone(), false, "화면 갱신 앱 감시 확인", false);
         }
     }
 }
