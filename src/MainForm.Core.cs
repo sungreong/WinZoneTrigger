@@ -28,6 +28,7 @@ namespace WinZoneTrigger
         private readonly System.Windows.Forms.Timer _startupRetryTimer;
         private readonly System.Windows.Forms.Timer _appWatchTimer;
         private readonly System.Windows.Forms.Timer _logRefreshTimer;
+        private readonly PowerStateMonitor _powerStateMonitor;
         private AppConfig _config;
         private bool _loadingSelection;
         private bool _isExiting;
@@ -147,6 +148,7 @@ namespace WinZoneTrigger
             _appWatchTimer.Tick += AppWatchTimerTick;
             _logRefreshTimer.Interval = 5000;
             _logRefreshTimer.Tick += LogRefreshTimerTick;
+            _powerStateMonitor = new PowerStateMonitor(HandlePowerModeChanged);
 
             InitializeComponent();
             ConfigureTray();
@@ -154,6 +156,7 @@ namespace WinZoneTrigger
             ResetScanTimer();
             ResetAppWatchTimer();
             _logRefreshTimer.Start();
+            ApplyPowerSettings();
         }
 
     }

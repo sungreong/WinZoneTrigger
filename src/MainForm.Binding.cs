@@ -533,6 +533,7 @@ namespace WinZoneTrigger
             {
                 ConfigStore.Save(_config);
                 StartupManager.SetEnabled(_startupCheck.Checked, _config.StartMinimized);
+                ApplyPowerSettings();
                 ResetScanTimer();
                 ResetAppWatchTimer();
                 BindZoneList(_currentZoneId);

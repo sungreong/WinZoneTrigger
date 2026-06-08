@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
+using Microsoft.Win32;
 using System.Windows.Forms;
 
 namespace WinZoneTrigger
@@ -19,6 +20,7 @@ namespace WinZoneTrigger
         private readonly object _automationStateLock = new object();
         private readonly System.Windows.Forms.Timer _scanTimer;
         private readonly System.Windows.Forms.Timer _appWatchTimer;
+        private readonly PowerStateMonitor _powerStateMonitor;
         private AppConfig _config;
         private DateTime _configLastWriteUtc;
         private bool _scanInProgress;
@@ -37,6 +39,7 @@ namespace WinZoneTrigger
         private string _stateLastAppWatchZoneId = "";
         private string _stateLastAppWatchItemId = "";
         private string _stateLastAppWatchItemText = "";
+        private volatile bool _powerResumeDetected;
 
         public BackgroundAutomationContext()
         {
@@ -45,10 +48,12 @@ namespace WinZoneTrigger
             _appWatchTimer = new System.Windows.Forms.Timer();
             _scanTimer.Tick += ScanTimerTick;
             _appWatchTimer.Tick += AppWatchTimerTick;
+            _powerStateMonitor = new PowerStateMonitor(HandlePowerModeChanged);
 
             DiagnosticsLog.WriteEvent("백그라운드 자동 실행 모드 시작");
             UpdateAutomationEvent("백그라운드 자동 실행 모드 시작", null, null);
             ResetTimers();
+            ApplyPowerSettings();
             StartInitialScan();
         }
 
@@ -60,6 +65,7 @@ namespace WinZoneTrigger
                 _appWatchTimer.Stop();
                 _scanTimer.Dispose();
                 _appWatchTimer.Dispose();
+                _powerStateMonitor.Dispose();
             }
 
             base.Dispose(disposing);
@@ -80,6 +86,8 @@ namespace WinZoneTrigger
             {
                 _appWatchTimer.Start();
             }
+
+            ApplyPowerSettings();
         }
 
         private void StartInitialScan()
@@ -127,7 +135,8 @@ namespace WinZoneTrigger
                 return;
             }
 
-            RunDueAppWatchChecks(false, "백그라운드 앱 감시");
+            bool resumeDetected = ConsumePowerResumeDetected();
+            RunDueAppWatchChecks(resumeDetected, resumeDetected ? "절전 복귀 앱 감시" : "백그라운드 앱 감시");
         }
 
         private void StartScan(bool forceScan, bool startupOnly)
@@ -457,6 +466,46 @@ namespace WinZoneTrigger
         private bool HasAppWatchZones()
         {
             return _config.Zones.Any(z => z.Enabled && z.GetEnabledAppWatchItems().Any());
+        }
+
+        private void ApplyPowerSettings()
+        {
+            if (_powerStateMonitor == null || _config == null)
+            {
+                return;
+            }
+
+            bool activeAutomation = HasZoneConditionScanZones() || HasAppWatchZones();
+            bool preventSleep = _config.PreventSleepWhileAutomationActive && activeAutomation;
+            _powerStateMonitor.SetSleepPrevention(
+                preventSleep,
+                preventSleep ? "백그라운드 자동 감시 활성" : "자동 감시 비활성 또는 설정 꺼짐");
+        }
+
+        private void HandlePowerModeChanged(PowerModes mode)
+        {
+            if (mode == PowerModes.Suspend)
+            {
+                UpdateAutomationEvent("절전 진입 감지", null, null);
+                return;
+            }
+
+            if (mode == PowerModes.Resume)
+            {
+                _powerResumeDetected = true;
+                UpdateAutomationEvent("절전 복귀 감지: 다음 앱 감시는 복귀 후 확인으로 기록됩니다.", null, null);
+            }
+        }
+
+        private bool ConsumePowerResumeDetected()
+        {
+            if (!_powerResumeDetected)
+            {
+                return false;
+            }
+
+            _powerResumeDetected = false;
+            return true;
         }
 
         private int GetShortestConditionScanIntervalSeconds()

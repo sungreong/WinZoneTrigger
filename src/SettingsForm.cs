@@ -10,6 +10,7 @@ namespace WinZoneTrigger
     {
         private readonly CheckBox _startupCheck;
         private readonly CheckBox _startMinimizedCheck;
+        private readonly CheckBox _preventSleepCheck;
 
         public bool StartupEnabled
         {
@@ -21,7 +22,12 @@ namespace WinZoneTrigger
             get { return _startMinimizedCheck.Checked; }
         }
 
-        public SettingsForm(bool startupEnabled, bool startMinimized)
+        public bool PreventSleepWhileAutomationActive
+        {
+            get { return _preventSleepCheck.Checked; }
+        }
+
+        public SettingsForm(bool startupEnabled, bool startMinimized, bool preventSleepWhileAutomationActive)
         {
             Text = "설정";
             StartPosition = FormStartPosition.CenterParent;
@@ -37,8 +43,9 @@ namespace WinZoneTrigger
             TableLayoutPanel root = new TableLayoutPanel();
             root.Dock = DockStyle.Fill;
             root.Padding = new Padding(16);
-            root.RowCount = 4;
+            root.RowCount = 5;
             root.ColumnCount = 1;
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -69,6 +76,16 @@ namespace WinZoneTrigger
             startupPanel.Controls.Add(_startMinimizedCheck, 0, startupPanel.RowCount++);
             root.Controls.Add(startupPanel, 0, 1);
 
+            TableLayoutPanel powerPanel = CreateSection("전원");
+            _preventSleepCheck = new CheckBox();
+            _preventSleepCheck.Text = "자동 감시 중 Windows 자동 절전 방지";
+            _preventSleepCheck.Checked = preventSleepWhileAutomationActive;
+            _preventSleepCheck.AutoSize = true;
+            _preventSleepCheck.Margin = new Padding(0, 4, 0, 7);
+            powerPanel.Controls.Add(_preventSleepCheck, 0, powerPanel.RowCount++);
+            powerPanel.Controls.Add(CreateStatusLine("동작", "화면은 꺼질 수 있습니다. 직접 누른 절전/전원 끄기는 막지 않습니다."), 0, powerPanel.RowCount++);
+            root.Controls.Add(powerPanel, 0, 2);
+
             TableLayoutPanel diagnosticsPanel = CreateSection("진단");
             diagnosticsPanel.Controls.Add(CreateStatusLine("트레이", "안정성 우선으로 현재 비활성"), 0, diagnosticsPanel.RowCount++);
             diagnosticsPanel.Controls.Add(CreateStatusLine("설정 파일", "config.json"), 0, diagnosticsPanel.RowCount++);
@@ -88,7 +105,7 @@ namespace WinZoneTrigger
             dumpFolderButton.Click += delegate { OpenFolder(Path.Combine(ConfigStore.ConfigDirectory, "dumps")); };
             folderButtons.Controls.Add(dumpFolderButton);
             diagnosticsPanel.Controls.Add(folderButtons, 0, diagnosticsPanel.RowCount++);
-            root.Controls.Add(diagnosticsPanel, 0, 2);
+            root.Controls.Add(diagnosticsPanel, 0, 3);
 
             FlowLayoutPanel buttons = new FlowLayoutPanel();
             buttons.Dock = DockStyle.Fill;
@@ -101,7 +118,7 @@ namespace WinZoneTrigger
             cancelButton.DialogResult = DialogResult.Cancel;
             buttons.Controls.Add(saveButton);
             buttons.Controls.Add(cancelButton);
-            root.Controls.Add(buttons, 0, 3);
+            root.Controls.Add(buttons, 0, 4);
 
             AcceptButton = saveButton;
             CancelButton = cancelButton;

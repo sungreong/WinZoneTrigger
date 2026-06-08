@@ -227,6 +227,7 @@ namespace WinZoneTrigger
             {
                 ConfigStore.Save(_config);
                 StartupManager.SetEnabled(_startupCheck.Checked, _config.StartMinimized);
+                ApplyPowerSettings();
                 ResetScanTimer();
                 ResetAppWatchTimer();
                 BindZoneList(selected.Id);
@@ -848,6 +849,10 @@ namespace WinZoneTrigger
             _startupRetryTimer.Stop();
             _appWatchTimer.Stop();
             _logRefreshTimer.Stop();
+            if (_powerStateMonitor != null)
+            {
+                _powerStateMonitor.Dispose();
+            }
 
             base.OnFormClosing(e);
         }
@@ -861,6 +866,34 @@ namespace WinZoneTrigger
         private bool IsShuttingDown()
         {
             return _isExiting || IsDisposed || Disposing;
+        }
+
+        private void HandlePowerModeChanged(PowerModes mode)
+        {
+            if (mode == PowerModes.Suspend)
+            {
+                DiagnosticsLog.WriteEvent("절전 진입 감지: 실행 중인 작업은 Windows 복귀 후 재확인됩니다.");
+                return;
+            }
+
+            if (mode == PowerModes.Resume)
+            {
+                DiagnosticsLog.WriteEvent("절전 복귀 감지: 감시 상태를 다음 주기에서 재확인합니다.");
+            }
+        }
+
+        private void ApplyPowerSettings()
+        {
+            if (_powerStateMonitor == null)
+            {
+                return;
+            }
+
+            bool activeAutomation = HasZoneConditionScanZones() || HasAppWatchZones();
+            bool preventSleep = _config.PreventSleepWhileAutomationActive && activeAutomation;
+            _powerStateMonitor.SetSleepPrevention(
+                preventSleep,
+                preventSleep ? "자동 감시 활성" : "자동 감시 비활성 또는 설정 꺼짐");
         }
 
         private sealed class ZoneListItem

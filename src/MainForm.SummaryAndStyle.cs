@@ -361,7 +361,10 @@ namespace WinZoneTrigger
 
         private void OpenSettingsDialog()
         {
-            using (SettingsForm dialog = new SettingsForm(_startupCheck.Checked, _config.StartMinimized))
+            using (SettingsForm dialog = new SettingsForm(
+                _startupCheck.Checked,
+                _config.StartMinimized,
+                _config.PreventSleepWhileAutomationActive))
             {
                 DialogResult result = dialog.ShowDialog(this);
                 if (result != DialogResult.OK)
@@ -372,6 +375,7 @@ namespace WinZoneTrigger
                 _startupCheck.Checked = dialog.StartupEnabled;
                 _startMinimizedCheck.Checked = dialog.StartMinimized;
                 _config.StartMinimized = dialog.StartMinimized;
+                _config.PreventSleepWhileAutomationActive = dialog.PreventSleepWhileAutomationActive;
                 SaveFromUi();
             }
         }
