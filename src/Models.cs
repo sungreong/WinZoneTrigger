@@ -23,6 +23,7 @@ namespace WinZoneTrigger
         public int ScanIntervalSeconds { get; set; }
         public bool StartMinimized { get; set; }
         public bool PreventSleepWhileAutomationActive { get; set; }
+        public bool TrayIconEnabled { get; set; }
         public bool AppWatchEnabled { get; set; }
         public bool? AppWatchRequireWindow { get; set; }
         public string AppWatchProcessName { get; set; }
@@ -40,6 +41,7 @@ namespace WinZoneTrigger
                 ScanIntervalSeconds = 30,
                 StartMinimized = true,
                 PreventSleepWhileAutomationActive = false,
+                TrayIconEnabled = false,
                 AppWatchEnabled = false,
                 AppWatchRequireWindow = false,
                 AppWatchProcessName = "",

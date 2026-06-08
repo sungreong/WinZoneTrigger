@@ -11,6 +11,7 @@ namespace WinZoneTrigger
         private readonly CheckBox _startupCheck;
         private readonly CheckBox _startMinimizedCheck;
         private readonly CheckBox _preventSleepCheck;
+        private readonly CheckBox _trayIconCheck;
 
         public bool StartupEnabled
         {
@@ -27,12 +28,21 @@ namespace WinZoneTrigger
             get { return _preventSleepCheck.Checked; }
         }
 
-        public SettingsForm(bool startupEnabled, bool startMinimized, bool preventSleepWhileAutomationActive)
+        public bool TrayIconEnabled
+        {
+            get { return _trayIconCheck.Checked; }
+        }
+
+        public SettingsForm(
+            bool startupEnabled,
+            bool startMinimized,
+            bool preventSleepWhileAutomationActive,
+            bool trayIconEnabled)
         {
             Text = "설정";
             StartPosition = FormStartPosition.CenterParent;
-            MinimumSize = new Size(520, 420);
-            Size = new Size(560, 460);
+            MinimumSize = new Size(560, 500);
+            Size = new Size(590, 540);
             MaximizeBox = false;
             MinimizeBox = false;
             ShowIcon = false;
@@ -43,8 +53,9 @@ namespace WinZoneTrigger
             TableLayoutPanel root = new TableLayoutPanel();
             root.Dock = DockStyle.Fill;
             root.Padding = new Padding(16);
-            root.RowCount = 5;
+            root.RowCount = 6;
             root.ColumnCount = 1;
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -86,8 +97,18 @@ namespace WinZoneTrigger
             powerPanel.Controls.Add(CreateNoteLine("자동 절전만 방지합니다. 직접 전원 동작은 그대로 진행됩니다."), 0, powerPanel.RowCount++);
             root.Controls.Add(powerPanel, 0, 2);
 
+            TableLayoutPanel trayPanel = CreateSection("트레이");
+            _trayIconCheck = new CheckBox();
+            _trayIconCheck.Text = "설정 화면 트레이 아이콘 표시";
+            _trayIconCheck.Checked = trayIconEnabled;
+            _trayIconCheck.AutoSize = true;
+            _trayIconCheck.Margin = new Padding(0, 4, 0, 4);
+            trayPanel.Controls.Add(_trayIconCheck, 0, trayPanel.RowCount++);
+            trayPanel.Controls.Add(CreateNoteLine("상태 확인과 설정 열기만 제공합니다. 풍선 알림은 사용하지 않습니다."), 0, trayPanel.RowCount++);
+            root.Controls.Add(trayPanel, 0, 3);
+
             TableLayoutPanel diagnosticsPanel = CreateSection("진단");
-            diagnosticsPanel.Controls.Add(CreateStatusLine("트레이", "안정성 우선으로 현재 비활성"), 0, diagnosticsPanel.RowCount++);
+            diagnosticsPanel.Controls.Add(CreateStatusLine("트레이", "설정에서 선택 가능"), 0, diagnosticsPanel.RowCount++);
             diagnosticsPanel.Controls.Add(CreateStatusLine("설정 파일", "config.json"), 0, diagnosticsPanel.RowCount++);
             diagnosticsPanel.Controls.Add(CreateStatusLine("로그 파일", "activity.log"), 0, diagnosticsPanel.RowCount++);
 
@@ -105,7 +126,7 @@ namespace WinZoneTrigger
             dumpFolderButton.Click += delegate { OpenFolder(Path.Combine(ConfigStore.ConfigDirectory, "dumps")); };
             folderButtons.Controls.Add(dumpFolderButton);
             diagnosticsPanel.Controls.Add(folderButtons, 0, diagnosticsPanel.RowCount++);
-            root.Controls.Add(diagnosticsPanel, 0, 3);
+            root.Controls.Add(diagnosticsPanel, 0, 4);
 
             FlowLayoutPanel buttons = new FlowLayoutPanel();
             buttons.Dock = DockStyle.Fill;
@@ -118,7 +139,7 @@ namespace WinZoneTrigger
             cancelButton.DialogResult = DialogResult.Cancel;
             buttons.Controls.Add(saveButton);
             buttons.Controls.Add(cancelButton);
-            root.Controls.Add(buttons, 0, 4);
+            root.Controls.Add(buttons, 0, 5);
 
             AcceptButton = saveButton;
             CancelButton = cancelButton;

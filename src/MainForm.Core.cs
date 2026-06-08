@@ -29,6 +29,8 @@ namespace WinZoneTrigger
         private readonly System.Windows.Forms.Timer _appWatchTimer;
         private readonly System.Windows.Forms.Timer _logRefreshTimer;
         private readonly PowerStateMonitor _powerStateMonitor;
+        private NotifyIcon _trayIcon;
+        private ContextMenuStrip _trayMenu;
         private AppConfig _config;
         private bool _loadingSelection;
         private bool _isExiting;

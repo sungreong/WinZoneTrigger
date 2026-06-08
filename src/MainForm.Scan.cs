@@ -853,6 +853,7 @@ namespace WinZoneTrigger
             {
                 _powerStateMonitor.Dispose();
             }
+            DisposeTrayIcon();
 
             base.OnFormClosing(e);
         }
