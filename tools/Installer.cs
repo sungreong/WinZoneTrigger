@@ -178,7 +178,7 @@ internal static class InstallerProgram
 
             _launchCheck = new CheckBox
             {
-                Text = "설치 후 앱 실행",
+                Text = "설치 후 설정 화면 열기",
                 Checked = true,
                 AutoSize = true,
                 FlatStyle = FlatStyle.Standard,
@@ -380,11 +380,11 @@ internal static class InstallerProgram
 
             if (launchAfterInstall)
             {
-                Log(log, "앱을 실행합니다.");
+                Log(log, "설정 화면을 엽니다.");
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = Paths.InstallExe,
-                    Arguments = "--minimized",
+                    Arguments = "",
                     WorkingDirectory = Paths.InstallDir,
                     UseShellExecute = true
                 });
