@@ -121,6 +121,7 @@ namespace WinZoneTrigger
             content.Controls.Add(trayPanel, 0, content.RowCount++);
 
             TableLayoutPanel diagnosticsPanel = CreateSection("진단");
+            diagnosticsPanel.Controls.Add(CreateStatusLine("자동 시작", StartupManager.GetStartupStatusSummary()), 0, diagnosticsPanel.RowCount++);
             diagnosticsPanel.Controls.Add(CreateStatusLine("트레이", "설정에서 선택 가능"), 0, diagnosticsPanel.RowCount++);
             diagnosticsPanel.Controls.Add(CreateStatusLine("설정 파일", "config.json"), 0, diagnosticsPanel.RowCount++);
             diagnosticsPanel.Controls.Add(CreateStatusLine("로그 파일", "activity.log"), 0, diagnosticsPanel.RowCount++);

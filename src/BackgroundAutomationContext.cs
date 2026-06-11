@@ -20,11 +20,15 @@ namespace WinZoneTrigger
         private readonly object _automationStateLock = new object();
         private readonly System.Windows.Forms.Timer _scanTimer;
         private readonly System.Windows.Forms.Timer _appWatchTimer;
+        private readonly System.Windows.Forms.Timer _startupRetryTimer;
         private readonly PowerStateMonitor _powerStateMonitor;
         private AppConfig _config;
         private DateTime _configLastWriteUtc;
         private bool _scanInProgress;
         private bool _appWatchInProgress;
+        private bool _startupRetryActive;
+        private int _startupRetryAttemptsRemaining;
+        private int _startupRetryAttemptsTotal;
         private List<string> _stateActiveZoneIds = new List<string>();
         private List<string> _stateActiveZoneNames = new List<string>();
         private LocationInfo _stateCurrentLocation;
@@ -46,8 +50,11 @@ namespace WinZoneTrigger
             LoadConfigFromDisk("시작", false);
             _scanTimer = new System.Windows.Forms.Timer();
             _appWatchTimer = new System.Windows.Forms.Timer();
+            _startupRetryTimer = new System.Windows.Forms.Timer();
             _scanTimer.Tick += ScanTimerTick;
             _appWatchTimer.Tick += AppWatchTimerTick;
+            _startupRetryTimer.Interval = 30000;
+            _startupRetryTimer.Tick += StartupRetryTimerTick;
             _powerStateMonitor = new PowerStateMonitor(HandlePowerModeChanged);
 
             DiagnosticsLog.WriteEvent("백그라운드 자동 실행 모드 시작");
@@ -63,8 +70,10 @@ namespace WinZoneTrigger
             {
                 _scanTimer.Stop();
                 _appWatchTimer.Stop();
+                _startupRetryTimer.Stop();
                 _scanTimer.Dispose();
                 _appWatchTimer.Dispose();
+                _startupRetryTimer.Dispose();
                 _powerStateMonitor.Dispose();
             }
 
@@ -94,14 +103,86 @@ namespace WinZoneTrigger
         {
             if (HasStartupRunOnceZones())
             {
-                StartScan(true, true);
+                StartStartupRetrySequence();
                 return;
             }
 
+            StopStartupRetry("시작 시 1회 실행 대상 위치가 없어 부팅 초기 확인을 종료합니다.");
             if (HasZoneConditionScanZones())
             {
                 StartScan(false, false);
             }
+        }
+
+        private void StartStartupRetrySequence()
+        {
+            _startupRetryAttemptsTotal = 12;
+            _startupRetryAttemptsRemaining = _startupRetryAttemptsTotal;
+            _startupRetryActive = true;
+            _startupRetryTimer.Stop();
+            DiagnosticsLog.WriteEvent("백그라운드 부팅 초기 확인 시작: 최대 " + _startupRetryAttemptsTotal + "회");
+            RunStartupRetryAttempt();
+        }
+
+        private void StartupRetryTimerTick(object sender, EventArgs e)
+        {
+            RunStartupRetryAttempt();
+        }
+
+        private void RunStartupRetryAttempt()
+        {
+            if (!_startupRetryActive)
+            {
+                _startupRetryTimer.Stop();
+                return;
+            }
+
+            if (!HasStartupRunOnceZones())
+            {
+                StopStartupRetry("시작 시 1회 실행 대상 위치가 없어 부팅 초기 확인을 종료합니다.");
+                return;
+            }
+
+            if (HasActiveStartupRunOnceZone())
+            {
+                StopStartupRetry("활성 위치가 인식되어 부팅 초기 확인을 종료합니다.");
+                return;
+            }
+
+            if (_scanInProgress || _appWatchInProgress)
+            {
+                DiagnosticsLog.WriteEvent("백그라운드 부팅 초기 확인 대기: 다른 자동 작업 진행 중");
+                _startupRetryTimer.Start();
+                return;
+            }
+
+            if (_startupRetryAttemptsRemaining <= 0)
+            {
+                StopStartupRetry("활성 위치를 찾지 못해 부팅 초기 확인을 종료합니다.");
+                return;
+            }
+
+            int attemptNumber = _startupRetryAttemptsTotal - _startupRetryAttemptsRemaining + 1;
+            _startupRetryAttemptsRemaining--;
+            DiagnosticsLog.WriteEvent("백그라운드 부팅 초기 확인 " + attemptNumber + "/" + _startupRetryAttemptsTotal);
+            StartScan(true, true);
+            if (_startupRetryAttemptsRemaining > 0)
+            {
+                _startupRetryTimer.Start();
+            }
+        }
+
+        private void StopStartupRetry(string reason)
+        {
+            if (!_startupRetryActive && !_startupRetryTimer.Enabled)
+            {
+                return;
+            }
+
+            _startupRetryTimer.Stop();
+            _startupRetryActive = false;
+            DiagnosticsLog.WriteEvent(reason);
+            UpdateAutomationEvent(reason, null, null);
         }
 
         private void ScanTimerTick(object sender, EventArgs e)
@@ -266,6 +347,7 @@ namespace WinZoneTrigger
 
             List<string> activeZoneIds = new List<string>();
             List<string> activeZoneNames = new List<string>();
+            bool hadEligibleStartupZone = false;
 
             foreach (ZoneRule zone in _config.Zones)
             {
@@ -300,9 +382,22 @@ namespace WinZoneTrigger
                     activeZoneIds.Add(zone.Id);
                     activeZoneNames.Add(zone.Name);
                 }
+
+                if (startupOnly && near && eligible)
+                {
+                    hadEligibleStartupZone = true;
+                }
             }
 
             SaveAutomationState(activeZoneIds, activeZoneNames, snapshot, visibleSsids, currentLocation, "백그라운드 위치 조건 확인 완료");
+            if (startupOnly && _startupRetryActive && hadEligibleStartupZone)
+            {
+                StopStartupRetry("활성 위치가 인식되어 부팅 초기 확인을 종료합니다.");
+            }
+            else if (startupOnly && _startupRetryActive && _startupRetryAttemptsRemaining <= 0 && !_scanInProgress)
+            {
+                StopStartupRetry("활성 위치를 찾지 못해 부팅 초기 확인을 종료합니다.");
+            }
         }
 
         private void TriggerZone(ZoneRule zone, string reason)
@@ -451,6 +546,13 @@ namespace WinZoneTrigger
                 && !string.IsNullOrWhiteSpace(zone.Id)
                 && _insideZones.TryGetValue(zone.Id, out active)
                 && active;
+        }
+
+        private bool HasActiveStartupRunOnceZone()
+        {
+            return _config.Zones.Any(z => z.Enabled
+                && z.RunOnceAtStartup.GetValueOrDefault(true)
+                && IsZoneActive(z));
         }
 
         private bool HasStartupRunOnceZones()

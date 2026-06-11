@@ -9,10 +9,12 @@ using System.Linq;
 using Microsoft.Win32;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
+using System.Xml;
 
 namespace WinZoneTrigger
 {
@@ -183,22 +185,184 @@ namespace WinZoneTrigger
 
         private static string FirstMeaningfulLine(string text)
         {
-            if (string.IsNullOrWhiteSpace(text))
+            return CommandOutputFormatter.FirstMeaningfulLine(text, 160);
+        }
+    }
+
+    internal static class CommandOutputFormatter
+    {
+        public static string FirstMeaningfulLine(string text, int maxLength)
+        {
+            string summary = SummarizeForUser(text);
+            if (string.IsNullOrWhiteSpace(summary))
             {
                 return "";
             }
 
-            string[] lines = text.Replace("\r", "\n").Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            string[] lines = summary.Replace("\r", "\n").Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
             foreach (string line in lines)
             {
                 string trimmed = line.Trim();
                 if (trimmed.Length > 0)
                 {
-                    return trimmed.Length > 160 ? trimmed.Substring(0, 160) : trimmed;
+                    return TrimToLength(trimmed, maxLength);
                 }
             }
 
             return "";
+        }
+
+        public static string SummarizeForUser(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return "";
+            }
+
+            string normalized = text.Trim();
+            if (normalized.StartsWith("#< CLIXML", StringComparison.OrdinalIgnoreCase))
+            {
+                string parsed = TryParseCliXml(normalized);
+                if (!string.IsNullOrWhiteSpace(parsed))
+                {
+                    return parsed;
+                }
+
+                string fallback = FirstNonCliXmlLine(normalized);
+                return string.IsNullOrWhiteSpace(fallback) ? "PowerShell 위치 API 오류" : fallback;
+            }
+
+            return DecodePowerShellEscapes(normalized);
+        }
+
+        public static string FirstRawLines(string text, int maxLines, int maxLength)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return "";
+            }
+
+            List<string> lines = text.Replace("\r", "\n")
+                .Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim())
+                .Where(s => s.Length > 0)
+                .Take(Math.Max(1, maxLines))
+                .ToList();
+
+            return TrimToLength(string.Join(" / ", lines.ToArray()), maxLength);
+        }
+
+        private static string TryParseCliXml(string text)
+        {
+            int xmlStart = text.IndexOf("<Objs", StringComparison.OrdinalIgnoreCase);
+            if (xmlStart < 0)
+            {
+                int firstLineEnd = text.IndexOf('\n');
+                xmlStart = firstLineEnd < 0 ? -1 : text.IndexOf('<', firstLineEnd + 1);
+            }
+            if (xmlStart < 0 || xmlStart >= text.Length)
+            {
+                return "";
+            }
+
+            try
+            {
+                XmlDocument document = new XmlDocument();
+                document.LoadXml(text.Substring(xmlStart));
+                XmlNodeList nodes = document.SelectNodes("//*[local-name()='S' and @S='Error']");
+                if (nodes == null || nodes.Count == 0)
+                {
+                    nodes = document.SelectNodes("//*[local-name()='S']");
+                }
+
+                List<string> parts = new List<string>();
+                if (nodes != null)
+                {
+                    foreach (XmlNode node in nodes)
+                    {
+                        string value = CleanCliXmlText(node.InnerText);
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            parts.Add(value);
+                        }
+                    }
+                }
+
+                if (parts.Count == 0)
+                {
+                    return "";
+                }
+
+                return CollapseLines(string.Join(Environment.NewLine, parts.ToArray()));
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        private static string FirstNonCliXmlLine(string text)
+        {
+            string[] lines = text.Replace("\r", "\n").Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string line in lines)
+            {
+                string trimmed = CleanCliXmlText(line);
+                if (trimmed.Length > 0 && !trimmed.StartsWith("#< CLIXML", StringComparison.OrdinalIgnoreCase))
+                {
+                    return trimmed;
+                }
+            }
+
+            return "";
+        }
+
+        private static string CleanCliXmlText(string text)
+        {
+            return CollapseLines(DecodePowerShellEscapes(text));
+        }
+
+        private static string DecodePowerShellEscapes(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return "";
+            }
+
+            return Regex.Replace(text, "_x([0-9A-Fa-f]{4})_", delegate(Match match)
+            {
+                int value;
+                if (int.TryParse(match.Groups[1].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value))
+                {
+                    return Convert.ToChar(value).ToString();
+                }
+
+                return match.Value;
+            });
+        }
+
+        private static string CollapseLines(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return "";
+            }
+
+            return string.Join(Environment.NewLine, text.Replace("\r", "\n")
+                .Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim())
+                .Where(s => s.Length > 0)
+                .Distinct()
+                .ToArray());
+        }
+
+        private static string TrimToLength(string text, int maxLength)
+        {
+            if (string.IsNullOrEmpty(text) || maxLength <= 0 || text.Length <= maxLength)
+            {
+                return text ?? "";
+            }
+
+            return text.Substring(0, maxLength);
         }
     }
 
@@ -269,6 +433,25 @@ namespace WinZoneTrigger
             return IsScheduledTaskEnabled() || IsRunKeyEnabled() || File.Exists(GetShortcutPath());
         }
 
+        public static string GetStartupStatusSummary()
+        {
+            List<string> modes = new List<string>();
+            if (IsScheduledTaskEnabled())
+            {
+                modes.Add("작업 스케줄러");
+            }
+            if (IsRunKeyEnabled())
+            {
+                modes.Add("Run 레지스트리");
+            }
+            if (File.Exists(GetShortcutPath()))
+            {
+                modes.Add("시작 폴더");
+            }
+
+            return modes.Count == 0 ? "미등록" : string.Join(", ", modes.ToArray());
+        }
+
         public static void SetEnabled(bool enabled, bool startMinimized)
         {
             if (!enabled)
@@ -276,6 +459,7 @@ namespace WinZoneTrigger
                 DeleteScheduledTask();
                 DeleteRunKey();
                 DeleteStartupShortcut();
+                DiagnosticsLog.WriteEvent("자동 시작 해제: 미등록");
                 return;
             }
 
@@ -285,11 +469,14 @@ namespace WinZoneTrigger
             try
             {
                 CreateScheduledTask(startMinimized);
+                DiagnosticsLog.WriteEvent("자동 시작 등록: 작업 스케줄러");
                 return;
             }
-            catch
+            catch (Exception ex)
             {
+                DiagnosticsLog.WriteEvent("작업 스케줄러 자동 시작 등록 실패, Run 레지스트리로 대체: " + ex.Message);
                 WriteRunKey(startMinimized);
+                DiagnosticsLog.WriteEvent("자동 시작 등록: Run 레지스트리");
             }
         }
 

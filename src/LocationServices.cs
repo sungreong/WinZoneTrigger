@@ -81,6 +81,8 @@ $culture = [Globalization.CultureInfo]::InvariantCulture
             if (command.ExitCode != 0)
             {
                 result.Error = FirstNonEmpty(command.Error, command.Output, "위치 명령 실행에 실패했습니다.");
+                DiagnosticsLog.WriteEvent("위치 명령 실패: " + result.Error
+                    + " / raw=" + FirstNonEmptyRaw(command.Error, command.Output));
                 return result;
             }
 
@@ -130,15 +132,19 @@ $culture = [Globalization.CultureInfo]::InvariantCulture
 
         private static string FirstLine(string text)
         {
-            if (string.IsNullOrWhiteSpace(text))
+            return CommandOutputFormatter.FirstMeaningfulLine(text, 240);
+        }
+
+        private static string FirstNonEmptyRaw(string first, string second)
+        {
+            string line = CommandOutputFormatter.FirstRawLines(first, 2, 260);
+            if (!string.IsNullOrWhiteSpace(line))
             {
-                return "";
+                return line;
             }
 
-            return text.Replace("\r", "\n")
-                .Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim())
-                .FirstOrDefault(s => s.Length > 0) ?? "";
+            line = CommandOutputFormatter.FirstRawLines(second, 2, 260);
+            return string.IsNullOrWhiteSpace(line) ? "없음" : line;
         }
     }
 
