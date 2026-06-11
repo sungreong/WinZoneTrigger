@@ -65,4 +65,40 @@ namespace WinZoneTrigger
         }
     }
 
+    internal static class AppIconProvider
+    {
+        public static Icon CreateApplicationIcon()
+        {
+            try
+            {
+                Icon extracted = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+                if (extracted != null)
+                {
+                    try
+                    {
+                        return (Icon)extracted.Clone();
+                    }
+                    finally
+                    {
+                        extracted.Dispose();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsLog.Write("앱 아이콘 로드 실패", ex);
+            }
+
+            try
+            {
+                Icon fallback = SystemIcons.Application;
+                return fallback == null ? null : (Icon)fallback.Clone();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+    }
+
 }

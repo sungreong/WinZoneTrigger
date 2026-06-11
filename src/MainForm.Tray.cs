@@ -68,15 +68,7 @@ namespace WinZoneTrigger
 
         private static Icon CreateTrayIcon()
         {
-            try
-            {
-                Icon icon = SystemIcons.Application;
-                return icon == null ? null : (Icon)icon.Clone();
-            }
-            catch
-            {
-                return null;
-            }
+            return AppIconProvider.CreateApplicationIcon();
         }
 
         private void ShowMainWindowFromTray()
