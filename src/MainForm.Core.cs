@@ -62,6 +62,13 @@ namespace WinZoneTrigger
         private Label _summaryOperatingBadge;
         private Label _summaryMatchBadge;
         private Label _summaryModeBadge;
+        private Button _saveSummaryButton;
+        private Button _refreshSummaryButton;
+        private Button _testConditionSummaryButton;
+        private Button _testActionsSummaryButton;
+        private Button _openConfigSummaryButton;
+        private Button _operateSummaryButton;
+        private Button _stopOperatingSummaryButton;
         private CheckBox _monitoringCheck;
         private CheckBox _runOnceStartupCheck;
         private CheckBox _startupCheck;

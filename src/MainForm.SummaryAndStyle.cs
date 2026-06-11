@@ -27,18 +27,19 @@ namespace WinZoneTrigger
             summary.BackColor = UiSurfaceMuted;
             summary.Padding = new Padding(12, 8, 12, 8);
             summary.Margin = new Padding(0, 0, 0, 8);
-            summary.ColumnCount = 1;
-            summary.RowCount = 2;
+            summary.ColumnCount = 2;
+            summary.RowCount = 1;
             summary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            summary.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            summary.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             summary.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             TableLayoutPanel textStack = new TableLayoutPanel();
-            textStack.Dock = DockStyle.Top;
+            textStack.Dock = DockStyle.Fill;
             textStack.AutoSize = true;
             textStack.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             textStack.ColumnCount = 1;
             textStack.RowCount = 3;
+            textStack.Margin = new Padding(0, 0, 12, 0);
             textStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             textStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             textStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -75,64 +76,58 @@ namespace WinZoneTrigger
             textStack.Controls.Add(badges, 0, 2);
 
             FlowLayoutPanel buttons = new FlowLayoutPanel();
-            buttons.Dock = DockStyle.Top;
+            buttons.Dock = DockStyle.Right;
             buttons.AutoSize = true;
             buttons.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             buttons.WrapContents = true;
             buttons.FlowDirection = FlowDirection.LeftToRight;
-            buttons.Margin = new Padding(0, 7, 0, 0);
+            buttons.Margin = new Padding(0, 0, 0, 0);
             buttons.BackColor = UiSurfaceMuted;
+            buttons.MaximumSize = new Size(216, 0);
 
-            Button saveSelectedButton = CreateButton("저장");
-            SetFixedButtonSize(saveSelectedButton, 82, 34);
-            saveSelectedButton.Click += delegate { SaveFromUi(); };
+            _saveSummaryButton = CreateSummaryIconButton("\uE74E", "저장");
+            _saveSummaryButton.Click += delegate { SaveFromUi(); };
 
-            Button refreshScreenButton = CreateButton("화면 갱신");
-            SetFixedButtonSize(refreshScreenButton, 100, 34);
-            refreshScreenButton.Click += delegate { RefreshStatusAndLogsNow(); };
+            _refreshSummaryButton = CreateSummaryIconButton("\uE72C", "화면 갱신");
+            _refreshSummaryButton.Click += delegate { RefreshStatusAndLogsNow(); };
 
-            Button testConditionButton = CreateButton("테스트해보기");
-            SetFixedButtonSize(testConditionButton, 118, 34);
-            testConditionButton.Click += delegate { TestSelectedZoneCondition(); };
+            _testConditionSummaryButton = CreateSummaryIconButton("\uE9D9", "조건 테스트");
+            _testConditionSummaryButton.Click += delegate { TestSelectedZoneCondition(); };
 
-            Button testActionsButton = CreateButton("동작 테스트");
-            SetFixedButtonSize(testActionsButton, 110, 34);
-            testActionsButton.Click += delegate { TestSelectedZoneActions(); };
+            _testActionsSummaryButton = CreateSummaryIconButton("\uE768", "동작 테스트");
+            _testActionsSummaryButton.Click += delegate { TestSelectedZoneActions(); };
 
-            Button openConfigButton = CreateButton("설정 폴더");
-            SetFixedButtonSize(openConfigButton, 100, 34);
-            openConfigButton.Click += delegate { OpenConfigFolder(); };
+            _openConfigSummaryButton = CreateSummaryIconButton("\uE8B7", "설정 폴더");
+            _openConfigSummaryButton.Click += delegate { OpenConfigFolder(); };
 
-            Button operateButton = CreateButton("운영하기");
-            SetFixedButtonSize(operateButton, 100, 34);
-            operateButton.Click += delegate { SetSelectedZoneOperating(true); };
+            _operateSummaryButton = CreateSummaryIconButton("\uE73E", "운영하기");
+            _operateSummaryButton.Click += delegate { SetSelectedZoneOperating(true); };
 
-            Button stopOperatingButton = CreateButton("운영 중지");
-            SetFixedButtonSize(stopOperatingButton, 100, 34);
-            stopOperatingButton.Click += delegate { ConfirmStopSelectedZoneOperating(); };
+            _stopOperatingSummaryButton = CreateSummaryIconButton("\uE71A", "운영 중지");
+            _stopOperatingSummaryButton.Click += delegate { ConfirmStopSelectedZoneOperating(); };
 
             FlowLayoutPanel saveGroup = CreateSummaryButtonGroup();
-            saveGroup.Controls.Add(saveSelectedButton);
-            saveGroup.Controls.Add(refreshScreenButton);
+            saveGroup.Controls.Add(_saveSummaryButton);
+            saveGroup.Controls.Add(_refreshSummaryButton);
             buttons.Controls.Add(saveGroup);
 
             FlowLayoutPanel testGroup = CreateSummaryButtonGroup();
-            testGroup.Controls.Add(testConditionButton);
-            testGroup.Controls.Add(testActionsButton);
+            testGroup.Controls.Add(_testConditionSummaryButton);
+            testGroup.Controls.Add(_testActionsSummaryButton);
             buttons.Controls.Add(testGroup);
 
             FlowLayoutPanel configGroup = CreateSummaryButtonGroup();
-            configGroup.Controls.Add(openConfigButton);
+            configGroup.Controls.Add(_openConfigSummaryButton);
             buttons.Controls.Add(configGroup);
 
             FlowLayoutPanel operatingGroup = CreateSummaryButtonGroup();
-            operatingGroup.Margin = new Padding(16, 0, 0, 0);
-            operatingGroup.Controls.Add(operateButton);
-            operatingGroup.Controls.Add(stopOperatingButton);
+            operatingGroup.Margin = new Padding(8, 0, 0, 0);
+            operatingGroup.Controls.Add(_operateSummaryButton);
+            operatingGroup.Controls.Add(_stopOperatingSummaryButton);
             buttons.Controls.Add(operatingGroup);
 
             summary.Controls.Add(textStack, 0, 0);
-            summary.Controls.Add(buttons, 0, 1);
+            summary.Controls.Add(buttons, 1, 0);
             return summary;
         }
 
@@ -143,10 +138,45 @@ namespace WinZoneTrigger
             group.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             group.WrapContents = false;
             group.FlowDirection = FlowDirection.LeftToRight;
-            group.Margin = new Padding(0, 0, 12, 4);
+            group.Margin = new Padding(0, 0, 8, 4);
             group.Padding = new Padding(0);
             group.BackColor = UiSurfaceMuted;
             return group;
+        }
+
+        private Button CreateSummaryIconButton(string glyph, string tooltip)
+        {
+            Button button = new Button();
+            button.Text = glyph;
+            button.Font = new Font("Segoe MDL2 Assets", 10.5F, FontStyle.Regular, GraphicsUnit.Point);
+            button.TextAlign = ContentAlignment.MiddleCenter;
+            button.Width = 36;
+            button.Height = 34;
+            button.Margin = new Padding(0, 0, 4, 4);
+            button.Padding = new Padding(0);
+            button.FlatStyle = FlatStyle.Standard;
+            button.UseVisualStyleBackColor = true;
+            button.Cursor = Cursors.Hand;
+            button.ForeColor = UiText;
+            button.AccessibleName = tooltip;
+            button.AccessibleDescription = tooltip;
+            EnsureToolTip().SetToolTip(button, tooltip);
+            return button;
+        }
+
+        private ToolTip EnsureToolTip()
+        {
+            if (_toolTip != null)
+            {
+                return _toolTip;
+            }
+
+            _toolTip = new ToolTip();
+            _toolTip.AutoPopDelay = 6000;
+            _toolTip.InitialDelay = 350;
+            _toolTip.ReshowDelay = 100;
+            _toolTip.ShowAlways = true;
+            return _toolTip;
         }
 
         private void ConfirmStopSelectedZoneOperating()
