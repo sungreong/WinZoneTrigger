@@ -20,33 +20,38 @@ namespace WinZoneTrigger
     {
         private Control CreateSelectedZoneSummaryBar()
         {
+            const int summaryHeight = 132;
+
             TableLayoutPanel summary = new TableLayoutPanel();
             summary.Dock = DockStyle.Top;
-            summary.AutoSize = true;
-            summary.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            summary.AutoSize = false;
+            summary.Height = summaryHeight;
+            summary.MinimumSize = new Size(0, summaryHeight);
+            summary.MaximumSize = new Size(0, summaryHeight);
             summary.BackColor = UiSurfaceMuted;
             summary.Padding = new Padding(12, 8, 12, 8);
             summary.Margin = new Padding(0, 0, 0, 8);
             summary.ColumnCount = 1;
             summary.RowCount = 2;
             summary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            summary.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            summary.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
             summary.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
 
             TableLayoutPanel textStack = new TableLayoutPanel();
-            textStack.Dock = DockStyle.Top;
-            textStack.AutoSize = true;
-            textStack.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            textStack.Dock = DockStyle.Fill;
+            textStack.AutoSize = false;
             textStack.ColumnCount = 1;
             textStack.RowCount = 3;
             textStack.Margin = new Padding(0);
-            textStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            textStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            textStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            textStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+            textStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+            textStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
 
             _selectedZoneSummaryLabel = new Label();
             _selectedZoneSummaryLabel.Text = "위치를 선택하세요";
-            _selectedZoneSummaryLabel.AutoSize = true;
+            _selectedZoneSummaryLabel.AutoSize = false;
+            _selectedZoneSummaryLabel.Dock = DockStyle.Fill;
+            _selectedZoneSummaryLabel.AutoEllipsis = true;
             _selectedZoneSummaryLabel.Font = new Font(Font.FontFamily, 12F, FontStyle.Bold, GraphicsUnit.Point);
             _selectedZoneSummaryLabel.ForeColor = UiAccentDark;
             _selectedZoneSummaryLabel.Margin = new Padding(0, 0, 0, 3);
@@ -55,16 +60,18 @@ namespace WinZoneTrigger
 
             _selectedZoneMetaLabel = new Label();
             _selectedZoneMetaLabel.Text = "등록된 위치를 선택하면 감지 조건과 실행 동작이 여기에 요약됩니다.";
-            _selectedZoneMetaLabel.AutoSize = true;
-            _selectedZoneMetaLabel.MaximumSize = new Size(620, 0);
+            _selectedZoneMetaLabel.AutoSize = false;
+            _selectedZoneMetaLabel.Dock = DockStyle.Fill;
+            _selectedZoneMetaLabel.AutoEllipsis = true;
             _selectedZoneMetaLabel.ForeColor = UiTextMuted;
-            _selectedZoneMetaLabel.Margin = new Padding(0, 0, 0, 5);
+            _selectedZoneMetaLabel.Margin = new Padding(0, 0, 0, 2);
             _selectedZoneMetaLabel.Tag = "Muted";
             textStack.Controls.Add(_selectedZoneMetaLabel, 0, 1);
 
             FlowLayoutPanel badges = new FlowLayoutPanel();
-            badges.AutoSize = true;
-            badges.WrapContents = true;
+            badges.Dock = DockStyle.Fill;
+            badges.AutoSize = false;
+            badges.WrapContents = false;
             badges.Margin = new Padding(0);
             badges.BackColor = UiSurfaceMuted;
             _summaryOperatingBadge = CreateSummaryBadge("미선택");
