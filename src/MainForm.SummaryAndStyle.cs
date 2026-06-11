@@ -680,6 +680,19 @@ namespace WinZoneTrigger
             return label;
         }
 
+        private Label CreateCoordinateLabel(string text)
+        {
+            Label label = new Label();
+            label.Text = text;
+            label.Dock = DockStyle.Fill;
+            label.AutoSize = false;
+            label.TextAlign = ContentAlignment.MiddleRight;
+            label.ForeColor = UiTextMuted;
+            label.Margin = new Padding(0, 4, 6, 4);
+            label.Tag = "Muted";
+            return label;
+        }
+
         private Label CreateStatusValueLabel(string text)
         {
             Label label = new Label();
