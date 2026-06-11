@@ -588,7 +588,7 @@ namespace WinZoneTrigger
 
             return "실행 대상: " + (item.LaunchTarget ?? "") + Environment.NewLine
                 + "프로세스: " + (item.ProcessName ?? "") + Environment.NewLine
-                + "체크 주기: " + BuildAppWatchIntervalText(item);
+                + "앱 확인 주기: " + BuildAppWatchIntervalText(item);
         }
 
         private string BuildAppWatchItemDisplayName(AppWatchItem item)

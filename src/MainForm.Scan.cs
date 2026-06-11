@@ -146,7 +146,7 @@ namespace WinZoneTrigger
             _scanInProgress = true;
             bool updateUi = forceScan;
             AppendLog(startupOnly
-                ? "시작 시 1회 실행 조건을 확인하는 중입니다..."
+                ? "Windows 시작 후 한 번 실행 조건을 확인하는 중입니다..."
                 : forceScan ? "Wi-Fi와 위치를 확인하는 중입니다..." : "위치 조건을 확인하는 중입니다...");
 
             Task.Factory.StartNew(delegate
@@ -518,7 +518,7 @@ namespace WinZoneTrigger
                     zoneStateChanged = true;
                     if (eligible)
                     {
-                        TriggerZone(zone.Clone(), startupOnly ? "시작 시 1회 실행" : "위치 진입");
+                        TriggerZone(zone.Clone(), startupOnly ? "Windows 시작 후 한 번 실행" : "조건 진입 시 실행");
                     }
                     if (hasEnabledAppWatch)
                     {
@@ -576,20 +576,15 @@ namespace WinZoneTrigger
 
         private bool ZoneMatches(ZoneRule zone, HashSet<string> visibleSsids, LocationInfo currentLocation)
         {
+            bool coordinateMatch = false;
             if (zone.UseCoordinates)
             {
-                if (currentLocation == null)
-                {
-                    return false;
-                }
-
-                double distanceMeters = GeoMath.DistanceMeters(
-                    currentLocation.Latitude,
-                    currentLocation.Longitude,
-                    zone.Latitude,
-                    zone.Longitude);
-
-                return distanceMeters <= zone.RadiusMeters;
+                coordinateMatch = currentLocation != null
+                    && GeoMath.DistanceMeters(
+                        currentLocation.Latitude,
+                        currentLocation.Longitude,
+                        zone.Latitude,
+                        zone.Longitude) <= zone.RadiusMeters;
             }
 
             List<string> wanted = zone.NearbySsids
@@ -598,17 +593,15 @@ namespace WinZoneTrigger
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            if (wanted.Count == 0)
+            bool wifiMatch = false;
+            if (zone.UseWifiCondition.GetValueOrDefault(false) && wanted.Count > 0)
             {
-                return false;
+                wifiMatch = zone.RequireAllSsids
+                    ? wanted.All(visibleSsids.Contains)
+                    : wanted.Any(visibleSsids.Contains);
             }
 
-            if (zone.RequireAllSsids)
-            {
-                return wanted.All(visibleSsids.Contains);
-            }
-
-            return wanted.Any(visibleSsids.Contains);
+            return coordinateMatch || wifiMatch;
         }
 
         private void TriggerZone(ZoneRule zone, string reason)
@@ -914,7 +907,7 @@ namespace WinZoneTrigger
                 {
                     string state = Zone.Enabled ? "운영 중" : "미운영";
                     string match = _owner.IsZoneActive(Zone) ? "조건 일치" : "대기";
-                    string mode = Zone.UseCoordinates ? "좌표 " + Zone.RadiusMeters + "m" : "Wi-Fi";
+                    string mode = _owner.BuildZoneModeSummary(Zone);
                     List<string> schedules = new List<string>();
                     if (Zone.RunOnceAtStartup.GetValueOrDefault(true))
                     {
@@ -922,7 +915,7 @@ namespace WinZoneTrigger
                     }
                     if (Zone.MonitoringEnabled.GetValueOrDefault(false))
                     {
-                        schedules.Add("지속 " + Math.Max(5, Zone.ScanIntervalSeconds) + "초");
+                        schedules.Add("조건 진입 시 실행 · 조건 확인 " + Math.Max(5, Zone.ScanIntervalSeconds) + "초");
                     }
                     string schedule = schedules.Count == 0 ? "자동 실행 없음" : string.Join("/", schedules.ToArray());
                     return state + " · " + match + " · " + mode + " · " + schedule;

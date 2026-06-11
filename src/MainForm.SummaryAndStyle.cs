@@ -82,7 +82,7 @@ namespace WinZoneTrigger
             badges.BackColor = UiSurfaceMuted;
             _summaryOperatingBadge = CreateSummaryBadge("미선택");
             _summaryMatchBadge = CreateSummaryBadge("대기");
-            _summaryModeBadge = CreateSummaryBadge("감지 방식 없음");
+            _summaryModeBadge = CreateSummaryBadge("감지 조건 없음");
             badges.Controls.Add(_summaryOperatingBadge);
             badges.Controls.Add(_summaryMatchBadge);
             badges.Controls.Add(_summaryModeBadge);
@@ -293,7 +293,7 @@ namespace WinZoneTrigger
                 _selectedZoneMetaLabel.Text = "등록된 위치를 선택하면 감지 조건과 실행 동작이 여기에 요약됩니다.";
                 SetSummaryBadge(_summaryOperatingBadge, "미선택", UiSurface, UiTextMuted);
                 SetSummaryBadge(_summaryMatchBadge, "대기", UiSurface, UiTextMuted);
-                SetSummaryBadge(_summaryModeBadge, "감지 방식 없음", UiSurface, UiTextMuted);
+                SetSummaryBadge(_summaryModeBadge, "감지 조건 없음", UiSurface, UiTextMuted);
                 return;
             }
 
@@ -319,16 +319,22 @@ namespace WinZoneTrigger
         {
             if (zone == null)
             {
-                return "감지 방식 없음";
+                return "감지 조건 없음";
             }
 
+            List<string> modes = new List<string>();
             if (zone.UseCoordinates)
             {
-                return "좌표 " + zone.RadiusMeters + "m";
+                modes.Add("좌표 " + zone.RadiusMeters + "m");
             }
 
             int wifiCount = zone.NearbySsids == null ? 0 : zone.NearbySsids.Count(s => !string.IsNullOrWhiteSpace(s));
-            return wifiCount == 0 ? "Wi-Fi 미설정" : "Wi-Fi " + wifiCount + "개";
+            if (zone.UseWifiCondition.GetValueOrDefault(false))
+            {
+                modes.Add(wifiCount == 0 ? "Wi-Fi 미설정" : "Wi-Fi " + wifiCount + "개");
+            }
+
+            return modes.Count == 0 ? "감지 조건 없음" : string.Join(" 또는 ", modes.ToArray());
         }
 
         private string BuildZoneActionSummary(ZoneRule zone)
@@ -358,7 +364,7 @@ namespace WinZoneTrigger
             int appWatchCount = zone.AppWatchItems == null ? 0 : zone.AppWatchItems.Count(item => item != null && item.Enabled);
             if (appWatchCount > 0)
             {
-                actions.Add("앱 감시 " + appWatchCount + "개");
+                actions.Add("앱 감시 " + appWatchCount + "개 · 앱 확인 " + BuildShortestAppWatchIntervalText(zone));
             }
             if (zone.Commands != null && zone.Commands.Any(c => !string.IsNullOrWhiteSpace(c)))
             {
@@ -372,7 +378,11 @@ namespace WinZoneTrigger
             }
             if (zone.MonitoringEnabled.GetValueOrDefault(false))
             {
-                schedules.Add("지속 " + Math.Max(5, zone.ScanIntervalSeconds) + "초");
+                schedules.Add("조건 진입 시 실행");
+            }
+            if (zone.MonitoringEnabled.GetValueOrDefault(false) || appWatchCount > 0)
+            {
+                schedules.Add("조건 확인 " + Math.Max(5, zone.ScanIntervalSeconds) + "초");
             }
 
             string prefix = zone.Enabled ? "자동 실행 준비됨" : "운영 중지됨";
@@ -381,6 +391,28 @@ namespace WinZoneTrigger
                 prefix += " · " + string.Join("/", schedules.ToArray());
             }
             return actions.Count == 0 ? prefix + " · 실행 동작 없음" : prefix + " · " + string.Join(", ", actions.ToArray());
+        }
+
+        private static string BuildShortestAppWatchIntervalText(ZoneRule zone)
+        {
+            if (zone == null || zone.AppWatchItems == null)
+            {
+                return "5분";
+            }
+
+            AppWatchItem shortest = zone.AppWatchItems
+                .Where(item => item != null && item.Enabled)
+                .OrderBy(item => string.Equals(item.IntervalUnit, "Hours", StringComparison.OrdinalIgnoreCase)
+                    ? Math.Max(1, item.IntervalValue) * 60
+                    : Math.Max(1, item.IntervalValue))
+                .FirstOrDefault();
+            if (shortest == null)
+            {
+                return "5분";
+            }
+
+            bool hours = string.Equals(shortest.IntervalUnit, "Hours", StringComparison.OrdinalIgnoreCase);
+            return Math.Max(1, shortest.IntervalValue) + (hours ? "시간" : "분");
         }
 
         private void TestSelectedZoneActions()

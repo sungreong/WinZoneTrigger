@@ -197,7 +197,7 @@ namespace WinZoneTrigger
             _detailTabs.TabPages.Add(CreateDetailTabPage("앱 감시", _appWatchTable));
             _detailTabs.TabPages.Add(CreateDetailTabPage("상태/로그", _statusTable));
 
-            AddSectionHeaderTo(_conditionTable, "위치 등록");
+            AddSectionHeaderTo(_conditionTable, "언제 이 위치로 볼까요?");
 
             _zoneEnabledCheck = new CheckBox();
             _zoneEnabledCheck.Text = "이 위치 운영";
@@ -210,18 +210,18 @@ namespace WinZoneTrigger
             zoneSchedulePanel.WrapContents = true;
 
             _runOnceStartupCheck = new CheckBox();
-            _runOnceStartupCheck.Text = "시작 시 1회 실행";
+            _runOnceStartupCheck.Text = "Windows 시작 후 한 번 실행";
             _runOnceStartupCheck.AutoSize = true;
             _runOnceStartupCheck.Margin = new Padding(4, 7, 16, 4);
             zoneSchedulePanel.Controls.Add(_runOnceStartupCheck);
 
             _monitoringCheck = new CheckBox();
-            _monitoringCheck.Text = "지속 감시";
+            _monitoringCheck.Text = "조건이 맞을 때마다 실행";
             _monitoringCheck.AutoSize = true;
             _monitoringCheck.Margin = new Padding(4, 7, 12, 4);
             zoneSchedulePanel.Controls.Add(_monitoringCheck);
 
-            zoneSchedulePanel.Controls.Add(CreateInlineLabel("주기(초)"));
+            zoneSchedulePanel.Controls.Add(CreateInlineLabel("조건 확인 주기(초)"));
             _intervalInput = new NumericUpDown();
             _intervalInput.Minimum = 5;
             _intervalInput.Maximum = 3600;
@@ -229,7 +229,12 @@ namespace WinZoneTrigger
             _intervalInput.Margin = new Padding(4, 4, 14, 4);
             zoneSchedulePanel.Controls.Add(_intervalInput);
 
-            AddRowTo(_conditionTable, "자동 실행", zoneSchedulePanel);
+            AddSectionHeaderTo(_actionTable, "언제 실행할까요?");
+            AddRowTo(_actionTable, "실행 시점", zoneSchedulePanel);
+
+            Label scheduleHintLabel = CreateStatusValueLabel("시작 후 조건이 처음 맞으면 한 번 실행합니다. 조건이 계속 맞는 동안 같은 동작을 매번 반복 실행하지 않습니다.");
+            scheduleHintLabel.MaximumSize = new Size(840, 0);
+            AddRowTo(_actionTable, "", scheduleHintLabel);
 
             _zoneNameText = new TextBox();
             _zoneNameText.Dock = DockStyle.Fill;
@@ -237,10 +242,10 @@ namespace WinZoneTrigger
             AddRowTo(_conditionTable, "위치 이름", _zoneNameText);
 
             _useCoordinatesCheck = new CheckBox();
-            _useCoordinatesCheck.Text = "Windows 위치 좌표로 감지";
+            _useCoordinatesCheck.Text = "좌표 범위 안에 있음";
             _useCoordinatesCheck.AutoSize = true;
             _useCoordinatesCheck.CheckedChanged += delegate { SetCoordinateInputsEnabled(); };
-            AddRowTo(_conditionTable, "감지 방식", _useCoordinatesCheck);
+            AddRowTo(_conditionTable, "좌표 조건", _useCoordinatesCheck);
 
             TableLayoutPanel coordinatesPanel = new TableLayoutPanel();
             coordinatesPanel.Dock = DockStyle.Fill;
@@ -295,6 +300,19 @@ namespace WinZoneTrigger
             _wifiChoicesPanel.Padding = new Padding(7, 6, 7, 5);
             AddRowTo(_conditionTable, "근처 Wi-Fi", _wifiChoicesPanel);
 
+            _useWifiConditionCheck = new CheckBox();
+            _useWifiConditionCheck.Text = "선택한 Wi-Fi가 보이면 이 위치로 봅니다";
+            _useWifiConditionCheck.AutoSize = true;
+            _useWifiConditionCheck.CheckedChanged += delegate
+            {
+                if (_loadingSelection)
+                {
+                    return;
+                }
+                CaptureCurrentZone();
+            };
+            AddRowTo(_conditionTable, "Wi-Fi 조건", _useWifiConditionCheck);
+
             _selectedWifiLabel = new Label();
             _selectedWifiLabel.Dock = DockStyle.Fill;
             _selectedWifiLabel.AutoSize = true;
@@ -310,9 +328,9 @@ namespace WinZoneTrigger
             AddRowTo(_conditionTable, "", wifiButtons);
 
             _requireAllSsidsCheck = new CheckBox();
-            _requireAllSsidsCheck.Text = "위 Wi-Fi가 모두 보일 때만 감지";
+            _requireAllSsidsCheck.Text = "선택한 Wi-Fi가 모두 보여야 합니다";
             _requireAllSsidsCheck.AutoSize = true;
-            AddRowTo(_conditionTable, "Wi-Fi 조건", _requireAllSsidsCheck);
+            AddRowTo(_conditionTable, "", _requireAllSsidsCheck);
 
             AddSectionHeaderTo(_actionTable, "실행할 동작");
 
@@ -542,7 +560,11 @@ namespace WinZoneTrigger
             commandPanel.Controls.Add(_commandsText, 0, 1);
             AddRowTo(_actionTable, "고급 명령어", commandPanel);
 
-            AddSectionHeaderTo(_appWatchTable, "앱 감시");
+            AddSectionHeaderTo(_appWatchTable, "조건이 맞는 동안 앱을 유지");
+
+            Label appWatchHintLabel = CreateStatusValueLabel("이 위치가 활성일 때만 앱을 확인하고, 꺼져 있으면 다시 실행합니다.");
+            appWatchHintLabel.MaximumSize = new Size(840, 0);
+            AddRowTo(_appWatchTable, "", appWatchHintLabel);
 
             TableLayoutPanel appWatchListPanel = new TableLayoutPanel();
             appWatchListPanel.Dock = DockStyle.Fill;
@@ -679,7 +701,7 @@ namespace WinZoneTrigger
             _appWatchIntervalUnitCombo.Width = 88;
             _appWatchIntervalUnitCombo.Items.AddRange(new object[] { "분", "시간" });
             appWatchIntervalPanel.Controls.Add(_appWatchIntervalUnitCombo);
-            AddRowTo(_appWatchTable, "체크 주기", appWatchIntervalPanel);
+            AddRowTo(_appWatchTable, "앱 확인 주기", appWatchIntervalPanel);
 
             _appWatchStatusLabel = new Label();
             _appWatchStatusLabel.Dock = DockStyle.Fill;
@@ -749,7 +771,7 @@ namespace WinZoneTrigger
                 ResetScanTimer();
                 ZoneRule selected = GetSelectedZone();
                 string name = selected == null ? "선택 위치" : selected.Name;
-                AppendLog(_monitoringCheck.Checked ? "지속 감시를 켰습니다: " + name : "지속 감시를 껐습니다: " + name);
+                AppendLog(_monitoringCheck.Checked ? "조건 일치 시 실행을 켰습니다: " + name : "조건 일치 시 실행을 껐습니다: " + name);
             };
 
             _runOnceStartupCheck.CheckedChanged += delegate
@@ -766,7 +788,7 @@ namespace WinZoneTrigger
                 CaptureGlobalSettings();
                 ZoneRule selected = GetSelectedZone();
                 string name = selected == null ? "선택 위치" : selected.Name;
-                AppendLog(_runOnceStartupCheck.Checked ? "시작 시 1회 실행을 켰습니다: " + name : "시작 시 1회 실행을 껐습니다: " + name);
+                AppendLog(_runOnceStartupCheck.Checked ? "Windows 시작 후 한 번 실행을 켰습니다: " + name : "Windows 시작 후 한 번 실행을 껐습니다: " + name);
             };
 
             _intervalInput.ValueChanged += delegate

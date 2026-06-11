@@ -364,7 +364,7 @@ namespace WinZoneTrigger
                     DiagnosticsLog.WriteEvent("백그라운드 위치 진입: " + zone.Name);
                     if (eligible)
                     {
-                        TriggerZone(zone.Clone(), startupOnly ? "백그라운드 시작 시 1회 실행" : "백그라운드 위치 진입");
+                        TriggerZone(zone.Clone(), startupOnly ? "백그라운드 Windows 시작 후 한 번 실행" : "백그라운드 조건 진입 시 실행");
                     }
                     if (zone.GetEnabledAppWatchItems().Any())
                     {
@@ -510,19 +510,15 @@ namespace WinZoneTrigger
 
         private bool ZoneMatches(ZoneRule zone, HashSet<string> visibleSsids, LocationInfo currentLocation)
         {
+            bool coordinateMatch = false;
             if (zone.UseCoordinates)
             {
-                if (currentLocation == null)
-                {
-                    return false;
-                }
-
-                double distanceMeters = GeoMath.DistanceMeters(
-                    currentLocation.Latitude,
-                    currentLocation.Longitude,
-                    zone.Latitude,
-                    zone.Longitude);
-                return distanceMeters <= zone.RadiusMeters;
+                coordinateMatch = currentLocation != null
+                    && GeoMath.DistanceMeters(
+                        currentLocation.Latitude,
+                        currentLocation.Longitude,
+                        zone.Latitude,
+                        zone.Longitude) <= zone.RadiusMeters;
             }
 
             List<string> wanted = zone.NearbySsids
@@ -531,12 +527,15 @@ namespace WinZoneTrigger
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            if (wanted.Count == 0)
+            bool wifiMatch = false;
+            if (zone.UseWifiCondition.GetValueOrDefault(false) && wanted.Count > 0)
             {
-                return false;
+                wifiMatch = zone.RequireAllSsids
+                    ? wanted.All(visibleSsids.Contains)
+                    : wanted.Any(visibleSsids.Contains);
             }
 
-            return zone.RequireAllSsids ? wanted.All(visibleSsids.Contains) : wanted.Any(visibleSsids.Contains);
+            return coordinateMatch || wifiMatch;
         }
 
         private bool IsZoneActive(ZoneRule zone)
@@ -780,7 +779,7 @@ namespace WinZoneTrigger
         private static string BuildAppWatchStatusText(string summary, DateTime checkedAtLocal, DateTime nextCheckAtLocal)
         {
             return "확인 " + checkedAtLocal.ToString("yyyy-MM-dd HH:mm:ss")
-                + " · 다음 확인 " + nextCheckAtLocal.ToString("yyyy-MM-dd HH:mm:ss")
+                + " · 다음 앱 확인 " + nextCheckAtLocal.ToString("yyyy-MM-dd HH:mm:ss")
                 + " · " + (summary ?? "");
         }
     }

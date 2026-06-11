@@ -77,6 +77,7 @@ namespace WinZoneTrigger
         private CheckBox _zoneEnabledCheck;
         private TextBox _zoneNameText;
         private CheckBox _useCoordinatesCheck;
+        private CheckBox _useWifiConditionCheck;
         private TextBox _latitudeText;
         private TextBox _longitudeText;
         private NumericUpDown _radiusInput;

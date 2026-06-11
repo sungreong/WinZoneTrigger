@@ -132,7 +132,7 @@ namespace WinZoneTrigger
                 return;
             }
 
-            string message = "앱 감시 대기 · 위치 조건 일치 후 시작됩니다.";
+            string message = "앱 감시 대기 · 감지 조건이 맞으면 시작됩니다.";
             UpdateAppWatchStatusLabel(message);
             AppendLog(reason + " 대기(" + BuildAppWatchLogName(zone, item) + "): 위치 조건이 아직 일치하지 않습니다.");
             if (HasZoneConditionScanZones())
@@ -418,12 +418,12 @@ namespace WinZoneTrigger
 
             if (!IsZoneActive(zone))
             {
-                return "앱 감시 대기 · 위치 조건 불일치";
+                return "대기: 감지 조건이 아직 맞지 않음";
             }
 
             DateTime? next = EstimateNextAppWatchCheckTime(zone, item);
             return next.HasValue
-                ? "아직 확인 전입니다. · 다음 확인 " + FormatAppWatchTimestamp(next.Value)
+                ? "확인 중: 조건 일치 · 다음 앱 확인 " + FormatAppWatchTimestamp(next.Value)
                 : "아직 확인 전입니다.";
         }
 
@@ -526,7 +526,7 @@ namespace WinZoneTrigger
             string text = "확인 " + FormatAppWatchTimestamp(zoneResult.CheckedAtLocal);
             if (includeNext && zoneResult.NextCheckAtLocal.HasValue)
             {
-                text += " · 다음 확인 " + FormatAppWatchTimestamp(zoneResult.NextCheckAtLocal.Value);
+                text += " · 다음 앱 확인 " + FormatAppWatchTimestamp(zoneResult.NextCheckAtLocal.Value);
             }
 
             return text;

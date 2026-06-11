@@ -237,6 +237,7 @@ namespace WinZoneTrigger
         public string AppWatchIntervalUnit { get; set; }
         public List<AppWatchItem> AppWatchItems { get; set; }
         public bool UseCoordinates { get; set; }
+        public bool? UseWifiCondition { get; set; }
         public double Latitude { get; set; }
         public double Longitude { get; set; }
         public int RadiusMeters { get; set; }
@@ -268,6 +269,7 @@ namespace WinZoneTrigger
                 AppWatchIntervalUnit = "Minutes",
                 AppWatchItems = new List<AppWatchItem>(),
                 UseCoordinates = false,
+                UseWifiCondition = false,
                 Latitude = 0,
                 Longitude = 0,
                 RadiusMeters = 200,
@@ -301,6 +303,7 @@ namespace WinZoneTrigger
                 AppWatchIntervalUnit = AppWatchIntervalUnit,
                 AppWatchItems = AppWatchItems == null ? new List<AppWatchItem>() : AppWatchItems.Select(item => item == null ? null : item.Clone()).Where(item => item != null).ToList(),
                 UseCoordinates = UseCoordinates,
+                UseWifiCondition = UseWifiCondition,
                 Latitude = Latitude,
                 Longitude = Longitude,
                 RadiusMeters = RadiusMeters,
@@ -432,6 +435,11 @@ namespace WinZoneTrigger
             else if (NearbySsids.Count == 1 && string.Equals(NearbySsids[0], "ExampleWifiName", StringComparison.OrdinalIgnoreCase))
             {
                 NearbySsids.Clear();
+            }
+
+            if (!UseWifiCondition.HasValue)
+            {
+                UseWifiCondition = NearbySsids.Any(s => !string.IsNullOrWhiteSpace(s));
             }
 
             if (Commands == null)

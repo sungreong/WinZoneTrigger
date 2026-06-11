@@ -224,6 +224,7 @@ namespace WinZoneTrigger
                 _intervalInput.Value = 30;
                 _zoneNameText.Text = "";
                 _useCoordinatesCheck.Checked = false;
+                _useWifiConditionCheck.Checked = false;
                 _latitudeText.Text = "";
                 _longitudeText.Text = "";
                 _radiusInput.Value = 200;
@@ -251,6 +252,7 @@ namespace WinZoneTrigger
                 _intervalInput.Value = Math.Max(_intervalInput.Minimum, Math.Min(_intervalInput.Maximum, zone.ScanIntervalSeconds));
                 _zoneNameText.Text = zone.Name;
                 _useCoordinatesCheck.Checked = zone.UseCoordinates;
+                _useWifiConditionCheck.Checked = zone.UseWifiCondition.GetValueOrDefault(false);
                 _latitudeText.Text = FormatCoordinate(zone.Latitude);
                 _longitudeText.Text = FormatCoordinate(zone.Longitude);
                 _radiusInput.Value = Math.Max(_radiusInput.Minimum, Math.Min(_radiusInput.Maximum, zone.RadiusMeters));
@@ -291,6 +293,7 @@ namespace WinZoneTrigger
             zone.ScanIntervalSeconds = Convert.ToInt32(_intervalInput.Value);
             zone.Name = string.IsNullOrWhiteSpace(_zoneNameText.Text) ? "이름 없는 위치" : _zoneNameText.Text.Trim();
             zone.UseCoordinates = _useCoordinatesCheck.Checked;
+            zone.UseWifiCondition = _useWifiConditionCheck.Checked;
             zone.Latitude = ParseCoordinate(_latitudeText.Text, zone.Latitude);
             zone.Longitude = ParseCoordinate(_longitudeText.Text, zone.Longitude);
             zone.RadiusMeters = Convert.ToInt32(_radiusInput.Value);
@@ -348,6 +351,7 @@ namespace WinZoneTrigger
             }
 
             target.UseCoordinates = source.UseCoordinates;
+            target.UseWifiCondition = source.UseWifiCondition;
             target.Latitude = source.Latitude;
             target.Longitude = source.Longitude;
             target.RadiusMeters = source.RadiusMeters;
@@ -505,7 +509,7 @@ namespace WinZoneTrigger
                     return;
                 }
 
-                _useCoordinatesCheck.Checked = false;
+                _useWifiConditionCheck.Checked = true;
                 _lastVisibleNetworks = networks;
                 RenderWifiChoiceButtons(networks.Select(n => n.Ssid), _lastVisibleNetworks);
                 RenderConnectWifiTargetButtons(_lastVisibleNetworks);
@@ -530,6 +534,21 @@ namespace WinZoneTrigger
                 _startupCheck.Checked = true;
             }
 
+            List<string> zonesWithoutDetection = _config.Zones
+                .Where(zone => zone.Enabled
+                    && (zone.RunOnceAtStartup.GetValueOrDefault(true)
+                        || zone.MonitoringEnabled.GetValueOrDefault(false)
+                        || zone.GetEnabledAppWatchItems().Any())
+                    && !HasDetectionConditionConfigured(zone))
+                .Select(zone => zone.Name)
+                .ToList();
+            if (zonesWithoutDetection.Count > 0)
+            {
+                string message = "감지 조건이 없는 위치가 있습니다: " + string.Join(", ", zonesWithoutDetection.ToArray());
+                AppendLog(message + " · 좌표 또는 Wi-Fi 조건을 하나 이상 켜세요.");
+                MessageBox.Show(this, message + Environment.NewLine + "자동 실행하려면 좌표 또는 Wi-Fi 조건을 하나 이상 켜세요.", "감지 조건 없음", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+
             try
             {
                 ConfigStore.Save(_config);
@@ -547,6 +566,19 @@ namespace WinZoneTrigger
                 AppendLog("저장 실패: " + ex.Message);
                 MessageBox.Show(this, ex.Message, "저장 실패", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private static bool HasDetectionConditionConfigured(ZoneRule zone)
+        {
+            if (zone == null)
+            {
+                return false;
+            }
+
+            bool hasWifi = zone.UseWifiCondition.GetValueOrDefault(false)
+                && zone.NearbySsids != null
+                && zone.NearbySsids.Any(s => !string.IsNullOrWhiteSpace(s));
+            return zone.UseCoordinates || hasWifi;
         }
 
         private void RemoveSelectedZone()

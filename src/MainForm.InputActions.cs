@@ -73,6 +73,10 @@ namespace WinZoneTrigger
             {
                 StyleToggleButton(toggle);
                 UpdateSelectedWifiLabel();
+                if (!_loadingSelection && toggle.Checked && _useWifiConditionCheck != null)
+                {
+                    _useWifiConditionCheck.Checked = true;
+                }
                 if (!_loadingSelection)
                 {
                     CaptureCurrentZone();
