@@ -27,19 +27,19 @@ namespace WinZoneTrigger
             summary.BackColor = UiSurfaceMuted;
             summary.Padding = new Padding(12, 8, 12, 8);
             summary.Margin = new Padding(0, 0, 0, 8);
-            summary.ColumnCount = 2;
-            summary.RowCount = 1;
+            summary.ColumnCount = 1;
+            summary.RowCount = 2;
             summary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            summary.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             summary.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            summary.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
 
             TableLayoutPanel textStack = new TableLayoutPanel();
-            textStack.Dock = DockStyle.Fill;
+            textStack.Dock = DockStyle.Top;
             textStack.AutoSize = true;
             textStack.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             textStack.ColumnCount = 1;
             textStack.RowCount = 3;
-            textStack.Margin = new Padding(0, 0, 12, 0);
+            textStack.Margin = new Padding(0);
             textStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             textStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             textStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -76,14 +76,14 @@ namespace WinZoneTrigger
             textStack.Controls.Add(badges, 0, 2);
 
             FlowLayoutPanel buttons = new FlowLayoutPanel();
-            buttons.Dock = DockStyle.Right;
-            buttons.AutoSize = true;
-            buttons.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            buttons.WrapContents = true;
+            buttons.Dock = DockStyle.Fill;
+            buttons.AutoSize = false;
+            buttons.Height = 38;
+            buttons.WrapContents = false;
             buttons.FlowDirection = FlowDirection.LeftToRight;
-            buttons.Margin = new Padding(0, 0, 0, 0);
+            buttons.Margin = new Padding(0, 8, 0, 0);
+            buttons.Padding = new Padding(0);
             buttons.BackColor = UiSurfaceMuted;
-            buttons.MaximumSize = new Size(216, 0);
 
             _saveSummaryButton = CreateSummaryIconButton("\uE74E", "저장");
             _saveSummaryButton.Click += delegate { SaveFromUi(); };
@@ -127,7 +127,7 @@ namespace WinZoneTrigger
             buttons.Controls.Add(operatingGroup);
 
             summary.Controls.Add(textStack, 0, 0);
-            summary.Controls.Add(buttons, 1, 0);
+            summary.Controls.Add(buttons, 0, 1);
             return summary;
         }
 
@@ -138,7 +138,7 @@ namespace WinZoneTrigger
             group.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             group.WrapContents = false;
             group.FlowDirection = FlowDirection.LeftToRight;
-            group.Margin = new Padding(0, 0, 8, 4);
+            group.Margin = new Padding(0, 0, 8, 0);
             group.Padding = new Padding(0);
             group.BackColor = UiSurfaceMuted;
             return group;
