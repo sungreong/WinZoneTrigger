@@ -351,7 +351,7 @@ namespace WinZoneTrigger
             FlowLayoutPanel row = new FlowLayoutPanel();
             row.AutoSize = false;
             row.Width = 610;
-            row.Height = 36;
+            row.Height = GetTextRowHeight(Font, 16, 42);
             row.WrapContents = false;
             row.Margin = new Padding(2, 2, 8, 2);
             row.Tag = item.Id;
@@ -396,8 +396,8 @@ namespace WinZoneTrigger
             row.Controls.Add(toggle);
 
             Button chip = CreateValueChip(item.Id, BuildAppWatchItemChipText(item), string.Equals(_selectedAppWatchItemId, item.Id, StringComparison.OrdinalIgnoreCase));
-            chip.Size = new Size(500, 30);
-            chip.Margin = new Padding(0, 3, 4, 3);
+            chip.Size = new Size(500, Math.Max(32, row.Height - 8));
+            chip.Margin = new Padding(0, 4, 4, 4);
             chip.TextAlign = ContentAlignment.MiddleLeft;
             if (_toolTip != null)
             {

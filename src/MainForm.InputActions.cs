@@ -125,7 +125,7 @@ namespace WinZoneTrigger
                 button.Tag = network.Ssid;
                 Size chipSize = GetChipSize(button.Text, button.Font);
                 button.AutoSize = false;
-                button.Size = new Size(chipSize.Width, 30);
+                button.Size = chipSize;
                 if (string.Equals(network.Ssid, selected, StringComparison.OrdinalIgnoreCase))
                 {
                     button.Text = "선택됨: " + button.Text;

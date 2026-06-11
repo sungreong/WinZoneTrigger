@@ -42,7 +42,7 @@ namespace WinZoneTrigger
             FlowLayoutPanel topBar = new FlowLayoutPanel();
             topBar.Dock = DockStyle.Top;
             topBar.AutoSize = false;
-            topBar.Height = 54;
+            topBar.Height = 64;
             topBar.BackColor = UiSurfaceMuted;
             topBar.Padding = new Padding(12, 8, 12, 8);
             topBar.WrapContents = false;
@@ -107,7 +107,7 @@ namespace WinZoneTrigger
             _zoneTabs.Dock = DockStyle.Fill;
             _zoneTabs.Multiline = true;
             _zoneTabs.SizeMode = TabSizeMode.Fixed;
-            _zoneTabs.ItemSize = new Size(106, 30);
+            _zoneTabs.ItemSize = new Size(112, 34);
             left.Controls.Add(_zoneTabs, 0, 1);
 
             _allZonesTab = new TabPage("전체");
@@ -184,7 +184,7 @@ namespace WinZoneTrigger
             _detailTabs = new TabControl();
             _detailTabs.Dock = DockStyle.Fill;
             _detailTabs.SizeMode = TabSizeMode.Fixed;
-            _detailTabs.ItemSize = new Size(128, 32);
+            _detailTabs.ItemSize = new Size(142, 36);
             detailShell.Controls.Add(_detailTabs, 0, 1);
 
             _conditionTable = CreateDetailTable();

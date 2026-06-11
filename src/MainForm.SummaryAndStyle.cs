@@ -20,7 +20,13 @@ namespace WinZoneTrigger
     {
         private Control CreateSelectedZoneSummaryBar()
         {
-            const int summaryHeight = 132;
+            Font summaryTitleFont = new Font(Font.FontFamily, 12F, FontStyle.Bold, GraphicsUnit.Point);
+            int titleRowHeight = GetTextRowHeight(summaryTitleFont, 8, 30);
+            int metaRowHeight = GetTextRowHeight(Font, 8, 28);
+            int badgeRowHeight = GetTextRowHeight(Font, 10, 30);
+            int textStackHeight = titleRowHeight + metaRowHeight + badgeRowHeight;
+            int toolbarRowHeight = 44;
+            int summaryHeight = 16 + textStackHeight + toolbarRowHeight;
 
             TableLayoutPanel summary = new TableLayoutPanel();
             summary.Dock = DockStyle.Top;
@@ -34,8 +40,8 @@ namespace WinZoneTrigger
             summary.ColumnCount = 1;
             summary.RowCount = 2;
             summary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            summary.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
-            summary.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            summary.RowStyles.Add(new RowStyle(SizeType.Absolute, textStackHeight));
+            summary.RowStyles.Add(new RowStyle(SizeType.Absolute, toolbarRowHeight));
 
             TableLayoutPanel textStack = new TableLayoutPanel();
             textStack.Dock = DockStyle.Fill;
@@ -43,16 +49,16 @@ namespace WinZoneTrigger
             textStack.ColumnCount = 1;
             textStack.RowCount = 3;
             textStack.Margin = new Padding(0);
-            textStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-            textStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-            textStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+            textStack.RowStyles.Add(new RowStyle(SizeType.Absolute, titleRowHeight));
+            textStack.RowStyles.Add(new RowStyle(SizeType.Absolute, metaRowHeight));
+            textStack.RowStyles.Add(new RowStyle(SizeType.Absolute, badgeRowHeight));
 
             _selectedZoneSummaryLabel = new Label();
             _selectedZoneSummaryLabel.Text = "위치를 선택하세요";
             _selectedZoneSummaryLabel.AutoSize = false;
             _selectedZoneSummaryLabel.Dock = DockStyle.Fill;
             _selectedZoneSummaryLabel.AutoEllipsis = true;
-            _selectedZoneSummaryLabel.Font = new Font(Font.FontFamily, 12F, FontStyle.Bold, GraphicsUnit.Point);
+            _selectedZoneSummaryLabel.Font = summaryTitleFont;
             _selectedZoneSummaryLabel.ForeColor = UiAccentDark;
             _selectedZoneSummaryLabel.Margin = new Padding(0, 0, 0, 3);
             _selectedZoneSummaryLabel.Tag = "AccentTitle";
@@ -85,7 +91,7 @@ namespace WinZoneTrigger
             FlowLayoutPanel buttons = new FlowLayoutPanel();
             buttons.Dock = DockStyle.Fill;
             buttons.AutoSize = false;
-            buttons.Height = 38;
+            buttons.Height = toolbarRowHeight - 4;
             buttons.WrapContents = false;
             buttons.FlowDirection = FlowDirection.LeftToRight;
             buttons.Margin = new Padding(0, 8, 0, 0);
@@ -136,6 +142,12 @@ namespace WinZoneTrigger
             summary.Controls.Add(textStack, 0, 0);
             summary.Controls.Add(buttons, 0, 1);
             return summary;
+        }
+
+        private static int GetTextRowHeight(Font font, int extraPixels, int minimum)
+        {
+            Size measured = TextRenderer.MeasureText("위치 자동 실행", font);
+            return Math.Max(minimum, measured.Height + extraPixels);
         }
 
         private FlowLayoutPanel CreateSummaryButtonGroup()
@@ -243,7 +255,7 @@ namespace WinZoneTrigger
             Label label = new Label();
             label.Text = text;
             label.AutoSize = false;
-            label.Height = 24;
+            label.Height = GetTextRowHeight(Font, 6, 28);
             label.Width = Math.Max(82, TextRenderer.MeasureText(text, Font).Width + 22);
             label.TextAlign = ContentAlignment.MiddleCenter;
             label.Margin = new Padding(0, 0, 6, 0);
@@ -686,7 +698,8 @@ namespace WinZoneTrigger
         {
             Size measured = TextRenderer.MeasureText(text ?? "", font ?? Font);
             int width = Math.Max(116, Math.Min(240, measured.Width + 28));
-            return new Size(width, 30);
+            int height = GetTextRowHeight(font ?? Font, 8, 32);
+            return new Size(width, height);
         }
 
         private FlowLayoutPanel CreateChipPanel(int height)
@@ -725,7 +738,8 @@ namespace WinZoneTrigger
         {
             Size measured = TextRenderer.MeasureText(text ?? "", font ?? Font);
             int width = Math.Max(104, Math.Min(360, measured.Width + 30));
-            return new Size(width, 30);
+            int height = GetTextRowHeight(font ?? Font, 8, 32);
+            return new Size(width, height);
         }
 
         private void StyleChip(Button chip, bool selected)
