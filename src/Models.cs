@@ -30,6 +30,9 @@ namespace WinZoneTrigger
         public string AppWatchLaunchTarget { get; set; }
         public int AppWatchIntervalValue { get; set; }
         public string AppWatchIntervalUnit { get; set; }
+        public bool BrightnessScheduleEnabled { get; set; }
+        public int DefaultBrightnessPercent { get; set; }
+        public List<BrightnessPeriod> BrightnessPeriods { get; set; }
         public List<ZoneRule> Zones { get; set; }
 
         public static AppConfig CreateDefault()
@@ -48,6 +51,9 @@ namespace WinZoneTrigger
                 AppWatchLaunchTarget = "",
                 AppWatchIntervalValue = 5,
                 AppWatchIntervalUnit = "Minutes",
+                BrightnessScheduleEnabled = false,
+                DefaultBrightnessPercent = 70,
+                BrightnessPeriods = new List<BrightnessPeriod>(),
                 Zones = new List<ZoneRule>
                 {
                     ZoneRule.CreateDefault("내 위치")
@@ -81,6 +87,24 @@ namespace WinZoneTrigger
             if (!string.Equals(AppWatchIntervalUnit, "Hours", StringComparison.OrdinalIgnoreCase))
             {
                 AppWatchIntervalUnit = "Minutes";
+            }
+
+            if (DefaultBrightnessPercent <= 0 || DefaultBrightnessPercent > 100)
+            {
+                DefaultBrightnessPercent = 70;
+            }
+
+            if (BrightnessPeriods == null)
+            {
+                BrightnessPeriods = new List<BrightnessPeriod>();
+            }
+
+            BrightnessPeriods = BrightnessPeriods
+                .Where(period => period != null)
+                .ToList();
+            foreach (BrightnessPeriod period in BrightnessPeriods)
+            {
+                period.Normalize();
             }
 
             int maxAppWatchInterval = string.Equals(AppWatchIntervalUnit, "Hours", StringComparison.OrdinalIgnoreCase) ? 168 : 10080;
@@ -140,6 +164,62 @@ namespace WinZoneTrigger
                     IntervalUnit = AppWatchIntervalUnit
                 });
                 firstZone.Normalize();
+            }
+        }
+    }
+
+    public sealed class BrightnessPeriod
+    {
+        public string Id { get; set; }
+        public bool Enabled { get; set; }
+        public int StartMinuteOfDay { get; set; }
+        public int BrightnessPercent { get; set; }
+
+        public static BrightnessPeriod CreateDefault()
+        {
+            return new BrightnessPeriod
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Enabled = true,
+                StartMinuteOfDay = 9 * 60,
+                BrightnessPercent = 70
+            };
+        }
+
+        public BrightnessPeriod Clone()
+        {
+            return new BrightnessPeriod
+            {
+                Id = Id,
+                Enabled = Enabled,
+                StartMinuteOfDay = StartMinuteOfDay,
+                BrightnessPercent = BrightnessPercent
+            };
+        }
+
+        public void Normalize()
+        {
+            if (string.IsNullOrWhiteSpace(Id))
+            {
+                Id = Guid.NewGuid().ToString("N");
+            }
+
+            if (StartMinuteOfDay < 0)
+            {
+                StartMinuteOfDay = 0;
+            }
+            else if (StartMinuteOfDay >= 24 * 60)
+            {
+                StartMinuteOfDay = (24 * 60) - 1;
+            }
+
+            if (BrightnessPercent <= 0)
+            {
+                BrightnessPercent = 1;
+            }
+            else if (BrightnessPercent > 100)
+            {
+                BrightnessPercent = 100;
             }
         }
     }

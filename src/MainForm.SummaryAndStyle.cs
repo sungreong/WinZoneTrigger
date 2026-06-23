@@ -446,6 +446,11 @@ namespace WinZoneTrigger
                 _startupCheck.Checked,
                 _config.StartMinimized,
                 _config.PreventSleepWhileAutomationActive,
+                _config.BrightnessScheduleEnabled,
+                _config.DefaultBrightnessPercent,
+                _config.BrightnessPeriods == null
+                    ? new List<BrightnessPeriod>()
+                    : _config.BrightnessPeriods.Select(period => period == null ? null : period.Clone()).Where(period => period != null).ToList(),
                 _config.TrayIconEnabled))
             {
                 DialogResult result = dialog.ShowDialog(this);
@@ -458,6 +463,9 @@ namespace WinZoneTrigger
                 _startMinimizedCheck.Checked = dialog.StartMinimized;
                 _config.StartMinimized = dialog.StartMinimized;
                 _config.PreventSleepWhileAutomationActive = dialog.PreventSleepWhileAutomationActive;
+                _config.BrightnessScheduleEnabled = dialog.BrightnessScheduleEnabled;
+                _config.DefaultBrightnessPercent = dialog.DefaultBrightnessPercent;
+                _config.BrightnessPeriods = dialog.BrightnessPeriods;
                 _config.TrayIconEnabled = dialog.TrayIconEnabled;
                 SaveFromUi();
             }

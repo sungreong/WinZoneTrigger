@@ -551,6 +551,7 @@ namespace WinZoneTrigger
                 ApplyTraySettings();
                 ResetScanTimer();
                 ResetAppWatchTimer();
+                EnsureBackgroundAutomationRunningAfterSave();
                 BindZoneList(_currentZoneId);
                 AppendLog("저장했습니다.");
             }

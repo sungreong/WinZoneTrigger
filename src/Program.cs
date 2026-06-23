@@ -222,12 +222,13 @@ namespace WinZoneTrigger
         private static bool HasBackgroundAutomationWork(AppConfig config)
         {
             return config != null
-                && config.Zones != null
-                && config.Zones.Any(z => z != null
-                    && z.Enabled
-                    && (z.RunOnceAtStartup.GetValueOrDefault(true)
-                        || z.MonitoringEnabled.GetValueOrDefault(false)
-                        || z.GetEnabledAppWatchItems().Any()));
+                && (config.BrightnessScheduleEnabled
+                    || (config.Zones != null
+                        && config.Zones.Any(z => z != null
+                            && z.Enabled
+                            && (z.RunOnceAtStartup.GetValueOrDefault(true)
+                                || z.MonitoringEnabled.GetValueOrDefault(false)
+                                || z.GetEnabledAppWatchItems().Any()))));
         }
 
         private static bool IsBackgroundInstanceRunning()

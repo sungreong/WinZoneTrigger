@@ -21,7 +21,9 @@ namespace WinZoneTrigger
         private readonly System.Windows.Forms.Timer _scanTimer;
         private readonly System.Windows.Forms.Timer _appWatchTimer;
         private readonly System.Windows.Forms.Timer _startupRetryTimer;
+        private readonly System.Windows.Forms.Timer _brightnessTimer;
         private readonly PowerStateMonitor _powerStateMonitor;
+        private readonly BrightnessScheduleRunner _brightnessScheduleRunner;
         private AppConfig _config;
         private DateTime _configLastWriteUtc;
         private bool _scanInProgress;
@@ -51,16 +53,21 @@ namespace WinZoneTrigger
             _scanTimer = new System.Windows.Forms.Timer();
             _appWatchTimer = new System.Windows.Forms.Timer();
             _startupRetryTimer = new System.Windows.Forms.Timer();
+            _brightnessTimer = new System.Windows.Forms.Timer();
             _scanTimer.Tick += ScanTimerTick;
             _appWatchTimer.Tick += AppWatchTimerTick;
             _startupRetryTimer.Interval = 30000;
             _startupRetryTimer.Tick += StartupRetryTimerTick;
+            _brightnessTimer.Interval = 60000;
+            _brightnessTimer.Tick += BrightnessTimerTick;
+            _brightnessScheduleRunner = new BrightnessScheduleRunner();
             _powerStateMonitor = new PowerStateMonitor(HandlePowerModeChanged);
 
             DiagnosticsLog.WriteEvent("백그라운드 자동 실행 모드 시작");
             UpdateAutomationEvent("백그라운드 자동 실행 모드 시작", null, null);
             ResetTimers();
             ApplyPowerSettings();
+            ApplyBrightnessSchedule("백그라운드 시작 화면 밝기 일정");
             StartInitialScan();
         }
 
@@ -71,9 +78,11 @@ namespace WinZoneTrigger
                 _scanTimer.Stop();
                 _appWatchTimer.Stop();
                 _startupRetryTimer.Stop();
+                _brightnessTimer.Stop();
                 _scanTimer.Dispose();
                 _appWatchTimer.Dispose();
                 _startupRetryTimer.Dispose();
+                _brightnessTimer.Dispose();
                 _powerStateMonitor.Dispose();
             }
 
@@ -96,7 +105,29 @@ namespace WinZoneTrigger
                 _appWatchTimer.Start();
             }
 
+            _brightnessTimer.Stop();
+            if (_config.BrightnessScheduleEnabled)
+            {
+                _brightnessTimer.Start();
+            }
+
             ApplyPowerSettings();
+        }
+
+        private void BrightnessTimerTick(object sender, EventArgs e)
+        {
+            if (ReloadConfigIfChanged())
+            {
+                ApplyBrightnessSchedule("설정 변경 화면 밝기 일정");
+                return;
+            }
+
+            ApplyBrightnessSchedule("시간대별 화면 밝기 일정");
+        }
+
+        private void ApplyBrightnessSchedule(string reason)
+        {
+            _brightnessScheduleRunner.Apply(_config, reason);
         }
 
         private void StartInitialScan()
@@ -665,6 +696,7 @@ namespace WinZoneTrigger
                 }
 
                 LoadConfigFromDisk("변경 감지", true);
+                _brightnessScheduleRunner.Reset();
                 ResetTimers();
                 return true;
             }

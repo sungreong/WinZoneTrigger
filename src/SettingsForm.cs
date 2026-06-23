@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace WinZoneTrigger
@@ -11,6 +14,9 @@ namespace WinZoneTrigger
         private readonly CheckBox _startupCheck;
         private readonly CheckBox _startMinimizedCheck;
         private readonly CheckBox _preventSleepCheck;
+        private readonly CheckBox _brightnessScheduleCheck;
+        private readonly NumericUpDown _defaultBrightnessInput;
+        private readonly DataGridView _brightnessGrid;
         private readonly CheckBox _trayIconCheck;
 
         public bool StartupEnabled
@@ -28,6 +34,21 @@ namespace WinZoneTrigger
             get { return _preventSleepCheck.Checked; }
         }
 
+        public bool BrightnessScheduleEnabled
+        {
+            get { return _brightnessScheduleCheck.Checked; }
+        }
+
+        public int DefaultBrightnessPercent
+        {
+            get { return Convert.ToInt32(_defaultBrightnessInput.Value); }
+        }
+
+        public List<BrightnessPeriod> BrightnessPeriods
+        {
+            get { return ReadBrightnessPeriods(); }
+        }
+
         public bool TrayIconEnabled
         {
             get { return _trayIconCheck.Checked; }
@@ -37,12 +58,15 @@ namespace WinZoneTrigger
             bool startupEnabled,
             bool startMinimized,
             bool preventSleepWhileAutomationActive,
+            bool brightnessScheduleEnabled,
+            int defaultBrightnessPercent,
+            List<BrightnessPeriod> brightnessPeriods,
             bool trayIconEnabled)
         {
             Text = "설정";
             StartPosition = FormStartPosition.CenterParent;
-            MinimumSize = new Size(560, 500);
-            Size = new Size(590, 540);
+            MinimumSize = new Size(640, 620);
+            Size = new Size(700, 720);
             MaximizeBox = false;
             MinimizeBox = false;
             ShowIcon = false;
@@ -110,6 +134,64 @@ namespace WinZoneTrigger
             powerPanel.Controls.Add(CreateNoteLine("자동 절전만 방지합니다. 직접 전원 동작은 그대로 진행됩니다."), 0, powerPanel.RowCount++);
             content.Controls.Add(powerPanel, 0, content.RowCount++);
 
+            TableLayoutPanel brightnessPanel = CreateSection("화면 밝기");
+            _brightnessScheduleCheck = new CheckBox();
+            _brightnessScheduleCheck.Text = "시간대별 화면 밝기 조정";
+            _brightnessScheduleCheck.Checked = brightnessScheduleEnabled;
+            _brightnessScheduleCheck.AutoSize = true;
+            _brightnessScheduleCheck.Margin = new Padding(0, 4, 0, 7);
+            _brightnessScheduleCheck.CheckedChanged += delegate { UpdateBrightnessControlsEnabled(); };
+            brightnessPanel.Controls.Add(_brightnessScheduleCheck, 0, brightnessPanel.RowCount++);
+
+            TableLayoutPanel defaultBrightnessRow = new TableLayoutPanel();
+            defaultBrightnessRow.AutoSize = true;
+            defaultBrightnessRow.ColumnCount = 3;
+            defaultBrightnessRow.Margin = new Padding(21, 0, 0, 8);
+            defaultBrightnessRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            defaultBrightnessRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            defaultBrightnessRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            Label defaultBrightnessLabel = new Label();
+            defaultBrightnessLabel.Text = "기본 밝기";
+            defaultBrightnessLabel.AutoSize = true;
+            defaultBrightnessLabel.Margin = new Padding(0, 5, 8, 0);
+            defaultBrightnessRow.Controls.Add(defaultBrightnessLabel, 0, 0);
+            _defaultBrightnessInput = new NumericUpDown();
+            _defaultBrightnessInput.Minimum = 1;
+            _defaultBrightnessInput.Maximum = 100;
+            _defaultBrightnessInput.Value = Math.Max(1, Math.Min(100, defaultBrightnessPercent <= 0 ? 70 : defaultBrightnessPercent));
+            _defaultBrightnessInput.Width = 76;
+            _defaultBrightnessInput.Margin = new Padding(0, 0, 6, 0);
+            defaultBrightnessRow.Controls.Add(_defaultBrightnessInput, 1, 0);
+            Label percentLabel = new Label();
+            percentLabel.Text = "%";
+            percentLabel.AutoSize = true;
+            percentLabel.Margin = new Padding(0, 5, 0, 0);
+            defaultBrightnessRow.Controls.Add(percentLabel, 2, 0);
+            brightnessPanel.Controls.Add(defaultBrightnessRow, 0, brightnessPanel.RowCount++);
+
+            _brightnessGrid = CreateBrightnessGrid();
+            List<BrightnessPeriod> initialPeriods = brightnessPeriods ?? new List<BrightnessPeriod>();
+            foreach (BrightnessPeriod period in initialPeriods)
+            {
+                AddBrightnessRow(period);
+            }
+            brightnessPanel.Controls.Add(_brightnessGrid, 0, brightnessPanel.RowCount++);
+
+            FlowLayoutPanel brightnessButtons = new FlowLayoutPanel();
+            brightnessButtons.AutoSize = true;
+            brightnessButtons.WrapContents = true;
+            brightnessButtons.Margin = new Padding(21, 8, 0, 0);
+            Button addBrightnessButton = CreateButton("시간 추가");
+            addBrightnessButton.Click += delegate { AddBrightnessRow(BrightnessPeriod.CreateDefault()); };
+            brightnessButtons.Controls.Add(addBrightnessButton);
+            Button removeBrightnessButton = CreateButton("선택 삭제");
+            removeBrightnessButton.Click += delegate { RemoveSelectedBrightnessRows(); };
+            brightnessButtons.Controls.Add(removeBrightnessButton);
+            brightnessPanel.Controls.Add(brightnessButtons, 0, brightnessPanel.RowCount++);
+            brightnessPanel.Controls.Add(CreateNoteLine("각 시각에 들어올 때 한 번만 밝기를 바꿉니다. 이후 직접 바꾼 밝기는 다음 시각 전까지 덮어쓰지 않습니다."), 0, brightnessPanel.RowCount++);
+            content.Controls.Add(brightnessPanel, 0, content.RowCount++);
+            UpdateBrightnessControlsEnabled();
+
             TableLayoutPanel trayPanel = CreateSection("트레이");
             _trayIconCheck = new CheckBox();
             _trayIconCheck.Text = "설정 화면 트레이 아이콘 표시";
@@ -122,6 +204,7 @@ namespace WinZoneTrigger
 
             TableLayoutPanel diagnosticsPanel = CreateSection("진단");
             diagnosticsPanel.Controls.Add(CreateStatusLine("자동 시작", StartupManager.GetStartupStatusSummary()), 0, diagnosticsPanel.RowCount++);
+            diagnosticsPanel.Controls.Add(CreateStatusLine("화면 밝기", brightnessScheduleEnabled ? "시간대별 조정" : "꺼짐"), 0, diagnosticsPanel.RowCount++);
             diagnosticsPanel.Controls.Add(CreateStatusLine("트레이", "설정에서 선택 가능"), 0, diagnosticsPanel.RowCount++);
             diagnosticsPanel.Controls.Add(CreateStatusLine("설정 파일", "config.json"), 0, diagnosticsPanel.RowCount++);
             diagnosticsPanel.Controls.Add(CreateStatusLine("로그 파일", "activity.log"), 0, diagnosticsPanel.RowCount++);
@@ -148,7 +231,16 @@ namespace WinZoneTrigger
             buttons.AutoSize = true;
             buttons.Margin = new Padding(0, 12, 0, 0);
             Button saveButton = CreateButton("저장");
-            saveButton.DialogResult = DialogResult.OK;
+            saveButton.Click += delegate
+            {
+                if (!ValidateBrightnessRows())
+                {
+                    return;
+                }
+
+                DialogResult = DialogResult.OK;
+                Close();
+            };
             Button cancelButton = CreateButton("취소");
             cancelButton.DialogResult = DialogResult.Cancel;
             buttons.Controls.Add(saveButton);
@@ -157,6 +249,186 @@ namespace WinZoneTrigger
 
             AcceptButton = saveButton;
             CancelButton = cancelButton;
+        }
+
+        private DataGridView CreateBrightnessGrid()
+        {
+            DataGridView grid = new DataGridView();
+            grid.AllowUserToAddRows = false;
+            grid.AllowUserToDeleteRows = true;
+            grid.AllowUserToResizeRows = false;
+            grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            grid.BackgroundColor = Color.FromArgb(253, 253, 249);
+            grid.BorderStyle = BorderStyle.FixedSingle;
+            grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            grid.Dock = DockStyle.Top;
+            grid.Height = 150;
+            grid.Margin = new Padding(21, 0, 0, 0);
+            grid.MultiSelect = true;
+            grid.RowHeadersVisible = false;
+            grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+
+            DataGridViewCheckBoxColumn enabledColumn = new DataGridViewCheckBoxColumn();
+            enabledColumn.Name = "Enabled";
+            enabledColumn.HeaderText = "사용";
+            enabledColumn.FillWeight = 18;
+            grid.Columns.Add(enabledColumn);
+
+            DataGridViewTextBoxColumn startColumn = new DataGridViewTextBoxColumn();
+            startColumn.Name = "StartTime";
+            startColumn.HeaderText = "시작";
+            startColumn.FillWeight = 36;
+            grid.Columns.Add(startColumn);
+
+            DataGridViewTextBoxColumn brightnessColumn = new DataGridViewTextBoxColumn();
+            brightnessColumn.Name = "Brightness";
+            brightnessColumn.HeaderText = "밝기(%)";
+            brightnessColumn.FillWeight = 36;
+            grid.Columns.Add(brightnessColumn);
+
+            return grid;
+        }
+
+        private void AddBrightnessRow(BrightnessPeriod period)
+        {
+            if (_brightnessGrid == null)
+            {
+                return;
+            }
+
+            BrightnessPeriod value = period == null ? BrightnessPeriod.CreateDefault() : period.Clone();
+            value.Normalize();
+            _brightnessGrid.Rows.Add(
+                value.Enabled,
+                BrightnessSchedule.FormatStartTime(value.StartMinuteOfDay),
+                value.BrightnessPercent.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private void RemoveSelectedBrightnessRows()
+        {
+            if (_brightnessGrid == null)
+            {
+                return;
+            }
+
+            foreach (DataGridViewRow row in _brightnessGrid.SelectedRows.Cast<DataGridViewRow>().Where(row => !row.IsNewRow).ToList())
+            {
+                _brightnessGrid.Rows.Remove(row);
+            }
+        }
+
+        private void UpdateBrightnessControlsEnabled()
+        {
+            bool enabled = _brightnessScheduleCheck != null && _brightnessScheduleCheck.Checked;
+            if (_defaultBrightnessInput != null)
+            {
+                _defaultBrightnessInput.Enabled = enabled;
+            }
+            if (_brightnessGrid != null)
+            {
+                _brightnessGrid.Enabled = enabled;
+            }
+        }
+
+        private bool ValidateBrightnessRows()
+        {
+            if (_brightnessGrid == null || !_brightnessScheduleCheck.Checked)
+            {
+                return true;
+            }
+
+            HashSet<int> startTimes = new HashSet<int>();
+            foreach (DataGridViewRow row in _brightnessGrid.Rows)
+            {
+                if (row.IsNewRow || IsBrightnessRowEmpty(row))
+                {
+                    continue;
+                }
+
+                int startMinute;
+                string startText = Convert.ToString(row.Cells["StartTime"].Value);
+                if (!BrightnessSchedule.TryParseStartTime(startText, out startMinute))
+                {
+                    MessageBox.Show(this, "밝기 시작 시각은 HH:mm 형식으로 입력하세요.", "화면 밝기 설정", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    _brightnessGrid.CurrentCell = row.Cells["StartTime"];
+                    return false;
+                }
+
+                int percent;
+                string percentText = Convert.ToString(row.Cells["Brightness"].Value);
+                if (!int.TryParse((percentText ?? "").Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out percent)
+                    || percent < 1
+                    || percent > 100)
+                {
+                    MessageBox.Show(this, "밝기는 1부터 100 사이 숫자로 입력하세요.", "화면 밝기 설정", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    _brightnessGrid.CurrentCell = row.Cells["Brightness"];
+                    return false;
+                }
+
+                if (startTimes.Contains(startMinute))
+                {
+                    MessageBox.Show(this, "같은 시작 시각이 중복되어 있습니다: " + BrightnessSchedule.FormatStartTime(startMinute), "화면 밝기 설정", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    _brightnessGrid.CurrentCell = row.Cells["StartTime"];
+                    return false;
+                }
+
+                startTimes.Add(startMinute);
+            }
+
+            return true;
+        }
+
+        private List<BrightnessPeriod> ReadBrightnessPeriods()
+        {
+            List<BrightnessPeriod> periods = new List<BrightnessPeriod>();
+            if (_brightnessGrid == null)
+            {
+                return periods;
+            }
+
+            foreach (DataGridViewRow row in _brightnessGrid.Rows)
+            {
+                if (row.IsNewRow || IsBrightnessRowEmpty(row))
+                {
+                    continue;
+                }
+
+                int startMinute;
+                int percent;
+                if (!BrightnessSchedule.TryParseStartTime(Convert.ToString(row.Cells["StartTime"].Value), out startMinute)
+                    || !int.TryParse(Convert.ToString(row.Cells["Brightness"].Value), NumberStyles.Integer, CultureInfo.InvariantCulture, out percent))
+                {
+                    continue;
+                }
+
+                object enabledValue = row.Cells["Enabled"].Value;
+                bool enabled = enabledValue == null || Convert.ToBoolean(enabledValue, CultureInfo.InvariantCulture);
+                BrightnessPeriod period = new BrightnessPeriod
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Enabled = enabled,
+                    StartMinuteOfDay = startMinute,
+                    BrightnessPercent = percent
+                };
+                period.Normalize();
+                periods.Add(period);
+            }
+
+            return periods
+                .OrderBy(period => period.StartMinuteOfDay)
+                .ToList();
+        }
+
+        private static bool IsBrightnessRowEmpty(DataGridViewRow row)
+        {
+            if (row == null)
+            {
+                return true;
+            }
+
+            string startText = Convert.ToString(row.Cells["StartTime"].Value);
+            string percentText = Convert.ToString(row.Cells["Brightness"].Value);
+            return string.IsNullOrWhiteSpace(startText) && string.IsNullOrWhiteSpace(percentText);
         }
 
         private TableLayoutPanel CreateSection(string titleText)
