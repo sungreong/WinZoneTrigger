@@ -193,6 +193,12 @@ namespace WinZoneTrigger
                 return;
             }
 
+            if (_startupRetryActive)
+            {
+                DiagnosticsLog.WriteEvent("백그라운드 위치 조건 확인 대기: 부팅 초기 확인 진행 중");
+                return;
+            }
+
             if (_appWatchInProgress)
             {
                 DiagnosticsLog.WriteEvent("백그라운드 위치 확인 건너뜀: 앱 감시 진행 중");
@@ -207,6 +213,12 @@ namespace WinZoneTrigger
             if (ReloadConfigIfChanged())
             {
                 StartInitialScan();
+                return;
+            }
+
+            if (_startupRetryActive)
+            {
+                DiagnosticsLog.WriteEvent("백그라운드 앱 감시 대기: 부팅 초기 확인 진행 중");
                 return;
             }
 

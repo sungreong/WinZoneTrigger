@@ -79,6 +79,8 @@ namespace WinZoneTrigger
                     return 0;
                 }
 
+                EnsureBackgroundAutomationStartedForSettings();
+
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 Application.Run(new MainForm(startMinimized, startedFromWindowsStartup, false));
@@ -183,6 +185,68 @@ namespace WinZoneTrigger
         private static bool HasArgument(string[] args, string value)
         {
             return args != null && args.Any(a => string.Equals(a, value, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static void EnsureBackgroundAutomationStartedForSettings()
+        {
+            try
+            {
+                AppConfig config = ConfigStore.Load();
+                config.Normalize();
+                if (!HasBackgroundAutomationWork(config))
+                {
+                    DiagnosticsLog.WriteEvent("설정 화면 시작: 백그라운드 자동 실행 대상이 없습니다.");
+                    return;
+                }
+
+                if (IsBackgroundInstanceRunning())
+                {
+                    DiagnosticsLog.WriteEvent("설정 화면 시작: 백그라운드 자동 실행 프로세스가 이미 실행 중입니다.");
+                    return;
+                }
+
+                ProcessStartInfo startInfo = new ProcessStartInfo();
+                startInfo.FileName = Application.ExecutablePath;
+                startInfo.Arguments = "--minimized";
+                startInfo.UseShellExecute = false;
+                startInfo.CreateNoWindow = true;
+                Process.Start(startInfo);
+                DiagnosticsLog.WriteEvent("설정 화면 시작: 백그라운드 자동 실행 프로세스를 시작했습니다.");
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsLog.Write("설정 화면의 백그라운드 자동 실행 시작 확인 실패", ex);
+            }
+        }
+
+        private static bool HasBackgroundAutomationWork(AppConfig config)
+        {
+            return config != null
+                && config.Zones != null
+                && config.Zones.Any(z => z != null
+                    && z.Enabled
+                    && (z.RunOnceAtStartup.GetValueOrDefault(true)
+                        || z.MonitoringEnabled.GetValueOrDefault(false)
+                        || z.GetEnabledAppWatchItems().Any()));
+        }
+
+        private static bool IsBackgroundInstanceRunning()
+        {
+            try
+            {
+                using (Mutex.OpenExisting(@"Local\WinZoneTrigger.BackgroundInstance"))
+                {
+                    return true;
+                }
+            }
+            catch (WaitHandleCannotBeOpenedException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return true;
+            }
         }
     }
 }
