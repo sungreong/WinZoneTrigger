@@ -174,6 +174,7 @@ namespace WinZoneTrigger
         public bool Enabled { get; set; }
         public int StartMinuteOfDay { get; set; }
         public int BrightnessPercent { get; set; }
+        public string NightLightAction { get; set; }
 
         public static BrightnessPeriod CreateDefault()
         {
@@ -182,7 +183,8 @@ namespace WinZoneTrigger
                 Id = Guid.NewGuid().ToString("N"),
                 Enabled = true,
                 StartMinuteOfDay = 9 * 60,
-                BrightnessPercent = 70
+                BrightnessPercent = 70,
+                NightLightAction = "Keep"
             };
         }
 
@@ -193,7 +195,8 @@ namespace WinZoneTrigger
                 Id = Id,
                 Enabled = Enabled,
                 StartMinuteOfDay = StartMinuteOfDay,
-                BrightnessPercent = BrightnessPercent
+                BrightnessPercent = BrightnessPercent,
+                NightLightAction = NightLightAction
             };
         }
 
@@ -220,6 +223,12 @@ namespace WinZoneTrigger
             else if (BrightnessPercent > 100)
             {
                 BrightnessPercent = 100;
+            }
+
+            if (!string.Equals(NightLightAction, "On", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(NightLightAction, "Off", StringComparison.OrdinalIgnoreCase))
+            {
+                NightLightAction = "Keep";
             }
         }
     }

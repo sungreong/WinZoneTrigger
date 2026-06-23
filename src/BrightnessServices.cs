@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Management;
+using Microsoft.Win32;
 
 namespace WinZoneTrigger
 {
@@ -17,7 +18,16 @@ namespace WinZoneTrigger
     {
         public string Key { get; set; }
         public int BrightnessPercent { get; set; }
+        public int EffectiveStartMinuteOfDay { get; set; }
+        public string NightLightAction { get; set; }
         public bool IsDefault { get; set; }
+    }
+
+    internal sealed class NightLightStatus
+    {
+        public bool IsAvailable { get; set; }
+        public bool? IsEnabled { get; set; }
+        public string Message { get; set; }
     }
 
     internal static class BrightnessSchedule
@@ -35,6 +45,8 @@ namespace WinZoneTrigger
                 {
                     Key = "default",
                     BrightnessPercent = 70,
+                    EffectiveStartMinuteOfDay = -1,
+                    NightLightAction = "Keep",
                     IsDefault = true
                 };
             }
@@ -55,6 +67,8 @@ namespace WinZoneTrigger
                 {
                     Key = "default",
                     BrightnessPercent = defaultPercent,
+                    EffectiveStartMinuteOfDay = -1,
+                    NightLightAction = "Keep",
                     IsDefault = true
                 };
             }
@@ -78,6 +92,8 @@ namespace WinZoneTrigger
                 {
                     Key = "default",
                     BrightnessPercent = defaultPercent,
+                    EffectiveStartMinuteOfDay = -1,
+                    NightLightAction = "Keep",
                     IsDefault = true
                 };
             }
@@ -86,8 +102,41 @@ namespace WinZoneTrigger
             {
                 Key = "period:" + target.StartMinuteOfDay.ToString(System.Globalization.CultureInfo.InvariantCulture) + ":" + (target.Id ?? ""),
                 BrightnessPercent = ClampBrightness(target.BrightnessPercent),
+                EffectiveStartMinuteOfDay = target.StartMinuteOfDay,
+                NightLightAction = NormalizeNightLightAction(target.NightLightAction),
                 IsDefault = false
             };
+        }
+
+        public static string NormalizeNightLightAction(string action)
+        {
+            if (string.Equals(action, "On", StringComparison.OrdinalIgnoreCase))
+            {
+                return "On";
+            }
+
+            if (string.Equals(action, "Off", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Off";
+            }
+
+            return "Keep";
+        }
+
+        public static string FormatNightLightAction(string action)
+        {
+            string normalized = NormalizeNightLightAction(action);
+            if (string.Equals(normalized, "On", StringComparison.OrdinalIgnoreCase))
+            {
+                return "켜기";
+            }
+
+            if (string.Equals(normalized, "Off", StringComparison.OrdinalIgnoreCase))
+            {
+                return "끄기";
+            }
+
+            return "유지";
         }
 
         public static int ClampBrightness(int percent)
@@ -173,6 +222,156 @@ namespace WinZoneTrigger
         }
     }
 
+    internal static class NightLightController
+    {
+        private const string CurrentCloudStorePath =
+            @"Software\Microsoft\Windows\CurrentVersion\CloudStore\Store\DefaultAccount\Current";
+
+        public static NightLightStatus GetStatus()
+        {
+            try
+            {
+                using (RegistryKey root = Registry.CurrentUser.OpenSubKey(CurrentCloudStorePath, false))
+                {
+                    if (root == null)
+                    {
+                        return Unavailable("야간모드 상태 저장소를 찾지 못했습니다.");
+                    }
+
+                    List<string> names = root.GetSubKeyNames()
+                        .Where(name => name.IndexOf("bluelightreduction", StringComparison.OrdinalIgnoreCase) >= 0
+                            && name.IndexOf("state", StringComparison.OrdinalIgnoreCase) >= 0)
+                        .OrderByDescending(name => name.IndexOf("perdevice", StringComparison.OrdinalIgnoreCase) >= 0)
+                        .ToList();
+
+                    foreach (string name in names)
+                    {
+                        bool? enabled = TryReadState(root, name);
+                        if (enabled.HasValue)
+                        {
+                            return new NightLightStatus
+                            {
+                                IsAvailable = true,
+                                IsEnabled = enabled,
+                                Message = enabled.Value ? "켜짐" : "꺼짐"
+                            };
+                        }
+                    }
+
+                    return Unavailable("야간모드 상태를 해석할 수 없습니다.");
+                }
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsLog.Write("야간모드 상태 확인 실패", ex);
+                return Unavailable("야간모드 상태 확인 실패: " + ex.Message);
+            }
+        }
+
+        public static string GetStatusSummary()
+        {
+            NightLightStatus status = GetStatus();
+            if (!status.IsAvailable || !status.IsEnabled.HasValue)
+            {
+                return status.Message ?? "확인 불가";
+            }
+
+            return "현재 " + (status.IsEnabled.Value ? "켜짐" : "꺼짐");
+        }
+
+        public static string ApplyAction(string action)
+        {
+            string normalized = BrightnessSchedule.NormalizeNightLightAction(action);
+            if (string.Equals(normalized, "Keep", StringComparison.OrdinalIgnoreCase))
+            {
+                return "";
+            }
+
+            NightLightStatus status = GetStatus();
+            if (!status.IsAvailable || !status.IsEnabled.HasValue)
+            {
+                return "야간모드 " + BrightnessSchedule.FormatNightLightAction(normalized) + " 건너뜀: " + (status.Message ?? "상태 확인 불가");
+            }
+
+            bool target = string.Equals(normalized, "On", StringComparison.OrdinalIgnoreCase);
+            if (status.IsEnabled.Value == target)
+            {
+                return "야간모드 이미 " + (target ? "켜짐" : "꺼짐");
+            }
+
+            return "야간모드 " + (target ? "켜기" : "끄기") + " 요청: Windows 공개 제어 API가 없어 자동 변경하지 않았습니다.";
+        }
+
+        private static NightLightStatus Unavailable(string message)
+        {
+            return new NightLightStatus
+            {
+                IsAvailable = false,
+                IsEnabled = null,
+                Message = message
+            };
+        }
+
+        private static bool? TryReadState(RegistryKey root, string parentName)
+        {
+            using (RegistryKey parent = root.OpenSubKey(parentName, false))
+            {
+                if (parent == null)
+                {
+                    return null;
+                }
+
+                foreach (string childName in parent.GetSubKeyNames())
+                {
+                    using (RegistryKey child = parent.OpenSubKey(childName, false))
+                    {
+                        byte[] data = child == null ? null : child.GetValue("Data") as byte[];
+                        bool? decoded = DecodeNightLightState(data);
+                        if (decoded.HasValue)
+                        {
+                            return decoded;
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private static bool? DecodeNightLightState(byte[] data)
+        {
+            if (data == null || data.Length < 8)
+            {
+                return null;
+            }
+
+            int trailingZeros = 0;
+            for (int i = data.Length - 1; i >= 0 && data[i] == 0; i--)
+            {
+                trailingZeros++;
+            }
+
+            int markerIndex = data.Length - trailingZeros - 1;
+            if (markerIndex < 0)
+            {
+                return null;
+            }
+
+            byte marker = data[markerIndex];
+            if (marker == 1)
+            {
+                return true;
+            }
+
+            if (marker == 0)
+            {
+                return false;
+            }
+
+            return null;
+        }
+    }
+
     internal sealed class BrightnessScheduleRunner
     {
         private string _lastAppliedScheduleKey = "";
@@ -200,11 +399,16 @@ namespace WinZoneTrigger
             }
 
             BrightnessApplyResult result = BrightnessController.SetBrightness(target.BrightnessPercent);
+            string nightLightMessage = NightLightController.ApplyAction(target.NightLightAction);
             if (result.Succeeded)
             {
                 _lastAppliedScheduleKey = target.Key;
                 _lastFailureMessage = "";
                 DiagnosticsLog.WriteEvent((reason ?? "화면 밝기 일정") + " 진입: " + result.Message);
+                if (!string.IsNullOrWhiteSpace(nightLightMessage))
+                {
+                    DiagnosticsLog.WriteEvent((reason ?? "화면 밝기 일정") + " 진입: " + nightLightMessage);
+                }
                 return;
             }
 
@@ -212,6 +416,11 @@ namespace WinZoneTrigger
             {
                 _lastFailureMessage = result.Message;
                 DiagnosticsLog.WriteEvent((reason ?? "화면 밝기 일정") + ": " + result.Message);
+            }
+
+            if (!string.IsNullOrWhiteSpace(nightLightMessage))
+            {
+                DiagnosticsLog.WriteEvent((reason ?? "화면 밝기 일정") + " 진입: " + nightLightMessage);
             }
 
             _lastAppliedScheduleKey = target.Key;

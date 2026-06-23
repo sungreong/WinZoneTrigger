@@ -17,6 +17,9 @@ namespace WinZoneTrigger
         private readonly CheckBox _brightnessScheduleCheck;
         private readonly NumericUpDown _defaultBrightnessInput;
         private readonly DataGridView _brightnessGrid;
+        private readonly TextBox _brightnessVerifyTimeText;
+        private readonly Label _brightnessVerifyResultLabel;
+        private readonly Label _nightLightStatusLabel;
         private readonly CheckBox _trayIconCheck;
 
         public bool StartupEnabled
@@ -189,6 +192,45 @@ namespace WinZoneTrigger
             brightnessButtons.Controls.Add(removeBrightnessButton);
             brightnessPanel.Controls.Add(brightnessButtons, 0, brightnessPanel.RowCount++);
             brightnessPanel.Controls.Add(CreateNoteLine("각 시각에 들어올 때 한 번만 밝기를 바꿉니다. 이후 직접 바꾼 밝기는 다음 시각 전까지 덮어쓰지 않습니다."), 0, brightnessPanel.RowCount++);
+
+            TableLayoutPanel verifyRow = new TableLayoutPanel();
+            verifyRow.AutoSize = true;
+            verifyRow.ColumnCount = 4;
+            verifyRow.Margin = new Padding(21, 8, 0, 6);
+            verifyRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            verifyRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            verifyRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            verifyRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            Label verifyLabel = new Label();
+            verifyLabel.Text = "시간 검증";
+            verifyLabel.AutoSize = true;
+            verifyLabel.Margin = new Padding(0, 6, 8, 0);
+            verifyRow.Controls.Add(verifyLabel, 0, 0);
+            _brightnessVerifyTimeText = new TextBox();
+            _brightnessVerifyTimeText.Text = DateTime.Now.ToString("HH:mm");
+            _brightnessVerifyTimeText.Width = 70;
+            _brightnessVerifyTimeText.Margin = new Padding(0, 2, 6, 0);
+            verifyRow.Controls.Add(_brightnessVerifyTimeText, 1, 0);
+            Button verifyButton = CreateButton("확인");
+            verifyButton.Click += delegate { VerifyBrightnessTime(); };
+            verifyRow.Controls.Add(verifyButton, 2, 0);
+            brightnessPanel.Controls.Add(verifyRow, 0, brightnessPanel.RowCount++);
+
+            _brightnessVerifyResultLabel = new Label();
+            _brightnessVerifyResultLabel.AutoSize = true;
+            _brightnessVerifyResultLabel.MaximumSize = new Size(560, 0);
+            _brightnessVerifyResultLabel.ForeColor = Color.FromArgb(35, 45, 47);
+            _brightnessVerifyResultLabel.Margin = new Padding(21, 0, 0, 8);
+            brightnessPanel.Controls.Add(_brightnessVerifyResultLabel, 0, brightnessPanel.RowCount++);
+
+            _nightLightStatusLabel = new Label();
+            _nightLightStatusLabel.Text = "야간모드: " + NightLightController.GetStatusSummary();
+            _nightLightStatusLabel.AutoSize = true;
+            _nightLightStatusLabel.MaximumSize = new Size(560, 0);
+            _nightLightStatusLabel.ForeColor = Color.FromArgb(97, 111, 103);
+            _nightLightStatusLabel.Margin = new Padding(21, 0, 0, 8);
+            brightnessPanel.Controls.Add(_nightLightStatusLabel, 0, brightnessPanel.RowCount++);
+
             content.Controls.Add(brightnessPanel, 0, content.RowCount++);
             UpdateBrightnessControlsEnabled();
 
@@ -205,6 +247,7 @@ namespace WinZoneTrigger
             TableLayoutPanel diagnosticsPanel = CreateSection("진단");
             diagnosticsPanel.Controls.Add(CreateStatusLine("자동 시작", StartupManager.GetStartupStatusSummary()), 0, diagnosticsPanel.RowCount++);
             diagnosticsPanel.Controls.Add(CreateStatusLine("화면 밝기", brightnessScheduleEnabled ? "시간대별 조정" : "꺼짐"), 0, diagnosticsPanel.RowCount++);
+            diagnosticsPanel.Controls.Add(CreateStatusLine("야간모드", NightLightController.GetStatusSummary()), 0, diagnosticsPanel.RowCount++);
             diagnosticsPanel.Controls.Add(CreateStatusLine("트레이", "설정에서 선택 가능"), 0, diagnosticsPanel.RowCount++);
             diagnosticsPanel.Controls.Add(CreateStatusLine("설정 파일", "config.json"), 0, diagnosticsPanel.RowCount++);
             diagnosticsPanel.Controls.Add(CreateStatusLine("로그 파일", "activity.log"), 0, diagnosticsPanel.RowCount++);
@@ -286,6 +329,13 @@ namespace WinZoneTrigger
             brightnessColumn.FillWeight = 36;
             grid.Columns.Add(brightnessColumn);
 
+            DataGridViewComboBoxColumn nightLightColumn = new DataGridViewComboBoxColumn();
+            nightLightColumn.Name = "NightLight";
+            nightLightColumn.HeaderText = "야간모드";
+            nightLightColumn.FillWeight = 38;
+            nightLightColumn.Items.AddRange(new object[] { "유지", "켜기", "끄기" });
+            grid.Columns.Add(nightLightColumn);
+
             return grid;
         }
 
@@ -301,7 +351,8 @@ namespace WinZoneTrigger
             _brightnessGrid.Rows.Add(
                 value.Enabled,
                 BrightnessSchedule.FormatStartTime(value.StartMinuteOfDay),
-                value.BrightnessPercent.ToString(CultureInfo.InvariantCulture));
+                value.BrightnessPercent.ToString(CultureInfo.InvariantCulture),
+                BrightnessSchedule.FormatNightLightAction(value.NightLightAction));
         }
 
         private void RemoveSelectedBrightnessRows()
@@ -327,6 +378,10 @@ namespace WinZoneTrigger
             if (_brightnessGrid != null)
             {
                 _brightnessGrid.Enabled = enabled;
+            }
+            if (_brightnessVerifyTimeText != null)
+            {
+                _brightnessVerifyTimeText.Enabled = enabled;
             }
         }
 
@@ -408,7 +463,8 @@ namespace WinZoneTrigger
                     Id = Guid.NewGuid().ToString("N"),
                     Enabled = enabled,
                     StartMinuteOfDay = startMinute,
-                    BrightnessPercent = percent
+                    BrightnessPercent = percent,
+                    NightLightAction = ReadNightLightAction(row.Cells["NightLight"].Value)
                 };
                 period.Normalize();
                 periods.Add(period);
@@ -429,6 +485,65 @@ namespace WinZoneTrigger
             string startText = Convert.ToString(row.Cells["StartTime"].Value);
             string percentText = Convert.ToString(row.Cells["Brightness"].Value);
             return string.IsNullOrWhiteSpace(startText) && string.IsNullOrWhiteSpace(percentText);
+        }
+
+        private void VerifyBrightnessTime()
+        {
+            if (_brightnessVerifyResultLabel == null)
+            {
+                return;
+            }
+
+            if (!ValidateBrightnessRows())
+            {
+                return;
+            }
+
+            int startMinute;
+            if (!BrightnessSchedule.TryParseStartTime(_brightnessVerifyTimeText.Text, out startMinute))
+            {
+                _brightnessVerifyResultLabel.Text = "검증할 시간은 HH:mm 형식으로 입력하세요.";
+                return;
+            }
+
+            AppConfig config = AppConfig.CreateDefault();
+            config.BrightnessScheduleEnabled = _brightnessScheduleCheck.Checked;
+            config.DefaultBrightnessPercent = DefaultBrightnessPercent;
+            config.BrightnessPeriods = ReadBrightnessPeriods();
+            config.Normalize();
+
+            DateTime verifyTime = DateTime.Today.AddMinutes(startMinute);
+            BrightnessScheduleTarget target = BrightnessSchedule.GetTarget(config, verifyTime);
+            string source = target.IsDefault
+                ? "기본 밝기"
+                : BrightnessSchedule.FormatStartTime(target.EffectiveStartMinuteOfDay) + " 시작 행";
+            _brightnessVerifyResultLabel.Text =
+                BrightnessSchedule.FormatStartTime(startMinute)
+                + " 기준: " + source
+                + " -> 밝기 " + target.BrightnessPercent + "%"
+                + " · 야간모드 " + BrightnessSchedule.FormatNightLightAction(target.NightLightAction)
+                + " · 현재 " + NightLightController.GetStatusSummary();
+
+            if (_nightLightStatusLabel != null)
+            {
+                _nightLightStatusLabel.Text = "야간모드: " + NightLightController.GetStatusSummary();
+            }
+        }
+
+        private static string ReadNightLightAction(object value)
+        {
+            string text = Convert.ToString(value);
+            if (string.Equals(text, "켜기", StringComparison.OrdinalIgnoreCase))
+            {
+                return "On";
+            }
+
+            if (string.Equals(text, "끄기", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Off";
+            }
+
+            return "Keep";
         }
 
         private TableLayoutPanel CreateSection(string titleText)
