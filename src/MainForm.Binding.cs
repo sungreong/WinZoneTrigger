@@ -430,10 +430,6 @@ namespace WinZoneTrigger
         private void CreateZoneFromCurrentLocation()
         {
             CaptureCurrentZone();
-            ZoneRule zone = ZoneRule.CreateDefault("현재 위치");
-            zone.NearbySsids.Clear();
-            _config.Zones.Add(zone);
-            BindZoneList(zone.Id);
             AppendLog("현재 좌표로 새 위치를 등록하는 중입니다...");
 
             Task.Factory.StartNew(delegate
@@ -441,12 +437,6 @@ namespace WinZoneTrigger
                 return LocationLocator.GetCurrentLocation();
             }).ContinueWith(delegate(Task<LocationReadResult> task)
             {
-                ZoneRule created = FindZone(zone.Id);
-                if (created == null)
-                {
-                    return;
-                }
-
                 if (task.IsFaulted)
                 {
                     string message = task.Exception == null ? "알 수 없는 위치 오류입니다." : task.Exception.GetBaseException().Message;
@@ -462,14 +452,17 @@ namespace WinZoneTrigger
                     return;
                 }
 
-                created.UseCoordinates = true;
-                created.Latitude = result.Location.Latitude;
-                created.Longitude = result.Location.Longitude;
-                created.RadiusMeters = Math.Max(200, created.RadiusMeters);
-                BindZoneList(created.Id);
+                ZoneRule zone = ZoneRule.CreateDefault("현재 위치");
+                zone.NearbySsids.Clear();
+                _config.Zones.Add(zone);
+                zone.UseCoordinates = true;
+                zone.Latitude = result.Location.Latitude;
+                zone.Longitude = result.Location.Longitude;
+                zone.RadiusMeters = Math.Max(200, zone.RadiusMeters);
+                BindZoneList(zone.Id);
                 _currentLocationLabel.Text = FormatLocation(result.Location);
                 SaveFromUi();
-                AppendLog("현재 위치가 등록되었습니다: " + created.Name);
+                AppendLog("현재 위치가 등록되었습니다: " + zone.Name);
             }, TaskScheduler.FromCurrentSynchronizationContext());
         }
 
@@ -596,10 +589,46 @@ namespace WinZoneTrigger
             }
 
             _config.Zones.Remove(selected);
-            _insideZones.Remove(selected.Id);
+            RemoveRuntimeStateForZone(selected.Id);
             _currentZoneId = null;
-            BindZoneList(_config.Zones.Count > 0 ? _config.Zones[0].Id : null);
-            AppendLog("위치를 삭제했습니다: " + selected.Name);
+
+            try
+            {
+                CaptureGlobalSettings();
+                ConfigStore.Save(_config);
+                StartupManager.SetEnabled(_startupCheck.Checked, _config.StartMinimized);
+                ApplyPowerSettings();
+                ResetScanTimer();
+                ResetAppWatchTimer();
+                BindZoneList(_config.Zones.Count > 0 ? _config.Zones[0].Id : null);
+                AppendLog("위치를 삭제하고 저장했습니다: " + selected.Name);
+            }
+            catch (Exception ex)
+            {
+                AppendLog("위치 삭제 저장 실패: " + ex.Message);
+                MessageBox.Show(this, ex.Message, "위치 삭제 저장 실패", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void RemoveRuntimeStateForZone(string zoneId)
+        {
+            if (string.IsNullOrWhiteSpace(zoneId))
+            {
+                return;
+            }
+
+            _insideZones.Remove(zoneId);
+
+            string prefix = zoneId + ":";
+            foreach (string key in _lastAppWatchChecks.Keys.Where(k => k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList())
+            {
+                _lastAppWatchChecks.Remove(key);
+            }
+
+            foreach (string key in _lastAppWatchStatusTexts.Keys.Where(k => k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList())
+            {
+                _lastAppWatchStatusTexts.Remove(key);
+            }
         }
 
         private void DuplicateSelectedZone()
