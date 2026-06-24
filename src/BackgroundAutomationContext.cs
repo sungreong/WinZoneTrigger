@@ -253,12 +253,6 @@ namespace WinZoneTrigger
                 return;
             }
 
-            if (_scanInProgress)
-            {
-                DiagnosticsLog.WriteEvent("백그라운드 앱 감시 건너뜀: 위치 확인 진행 중");
-                return;
-            }
-
             bool resumeDetected = ConsumePowerResumeDetected();
             RunDueAppWatchChecks(resumeDetected, resumeDetected ? "절전 복귀 앱 감시" : "백그라운드 앱 감시");
         }
@@ -391,12 +385,13 @@ namespace WinZoneTrigger
             List<string> activeZoneIds = new List<string>();
             List<string> activeZoneNames = new List<string>();
             bool hadEligibleStartupZone = false;
+            bool preserveActiveZones = ScanReliability.HasTransientDetectionError(snapshot);
 
             foreach (ZoneRule zone in _config.Zones)
             {
                 zone.Normalize();
-                bool near = zone.Enabled && ZoneMatches(zone, visibleSsids, currentLocation);
                 bool wasInside = IsZoneActive(zone);
+                bool near = zone.Enabled && (ZoneMatches(zone, visibleSsids, currentLocation) || (preserveActiveZones && wasInside));
                 bool eligible = startupOnly
                     ? zone.RunOnceAtStartup.GetValueOrDefault(true)
                     : zone.MonitoringEnabled.GetValueOrDefault(false);
@@ -465,7 +460,7 @@ namespace WinZoneTrigger
 
         private void RunDueAppWatchChecks(bool force, string reason)
         {
-            if (_appWatchInProgress || _scanInProgress)
+            if (_appWatchInProgress)
             {
                 DiagnosticsLog.WriteEvent(reason + " 건너뜀: 다른 자동 작업 진행 중");
                 return;
@@ -481,7 +476,7 @@ namespace WinZoneTrigger
                     DateTime last;
                     bool due = force
                         || !_lastAppWatchChecks.TryGetValue(key, out last)
-                        || (now - last).TotalMilliseconds >= GetAppWatchIntervalMilliseconds(item.IntervalValue, item.IntervalUnit);
+                        || (now - last).TotalMilliseconds >= AppWatchTiming.GetGuardIntervalMilliseconds(item.IntervalValue, item.IntervalUnit);
                     if (due)
                     {
                         _lastAppWatchChecks[key] = now;
@@ -514,7 +509,7 @@ namespace WinZoneTrigger
                     {
                         DateTime checkedAtLocal = DateTime.Now;
                         DateTime nextCheckAtLocal = checkedAtLocal.AddMilliseconds(
-                            GetAppWatchIntervalMilliseconds(item.IntervalValue, item.IntervalUnit));
+                            AppWatchTiming.GetGuardIntervalMilliseconds(item.IntervalValue, item.IntervalUnit));
                         bool requireWindow = item.RequireWindow.GetValueOrDefault(false);
                         AppWatchCheckResult result = AppWatchdog.EnsureRunning(
                             processName,
@@ -545,9 +540,19 @@ namespace WinZoneTrigger
                             itemText);
                     }
                 }
-            }).ContinueWith(delegate
+            }).ContinueWith(delegate(Task task)
             {
-                _appWatchInProgress = false;
+                try
+                {
+                    if (task != null && task.IsFaulted)
+                    {
+                        DiagnosticsLog.Write("백그라운드 앱 감시 작업 실패", task.Exception == null ? null : task.Exception.GetBaseException());
+                    }
+                }
+                finally
+                {
+                    _appWatchInProgress = false;
+                }
             });
         }
 
@@ -666,16 +671,9 @@ namespace WinZoneTrigger
             List<int> intervals = _config.Zones
                 .Where(z => z.Enabled)
                 .SelectMany(z => z.GetEnabledAppWatchItems())
-                .Select(item => GetAppWatchIntervalMilliseconds(item.IntervalValue, item.IntervalUnit))
+                .Select(item => AppWatchTiming.GetGuardIntervalMilliseconds(item.IntervalValue, item.IntervalUnit))
                 .ToList();
-            return intervals.Count == 0 ? GetAppWatchIntervalMilliseconds(5, "Minutes") : intervals.Min();
-        }
-
-        private static int GetAppWatchIntervalMilliseconds(int value, string unit)
-        {
-            long multiplier = string.Equals(unit, "Hours", StringComparison.OrdinalIgnoreCase) ? 3600000L : 60000L;
-            long milliseconds = Math.Max(1, value) * multiplier;
-            return milliseconds > int.MaxValue ? int.MaxValue : Convert.ToInt32(milliseconds);
+            return intervals.Count == 0 ? AppWatchTiming.DefaultGuardIntervalMilliseconds : intervals.Min();
         }
 
         private static string QuoteCommandArgument(string value)

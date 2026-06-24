@@ -301,14 +301,7 @@ namespace WinZoneTrigger
 
         private static int GetAppWatchIntervalMilliseconds(int value, string unit)
         {
-            long multiplier = string.Equals(unit, "Hours", StringComparison.OrdinalIgnoreCase) ? 3600000L : 60000L;
-            long milliseconds = Math.Max(1, value) * multiplier;
-            if (milliseconds > int.MaxValue)
-            {
-                return int.MaxValue;
-            }
-
-            return Convert.ToInt32(milliseconds);
+            return AppWatchTiming.GetIntervalMilliseconds(value, unit);
         }
 
         private void RenderAppWatchItems()

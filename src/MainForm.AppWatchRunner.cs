@@ -89,7 +89,7 @@ namespace WinZoneTrigger
                     item.Normalize();
                     DateTime last;
                     string key = BuildAppWatchStatusKey(zone.Id, item.Id);
-                    int interval = GetAppWatchIntervalMilliseconds(item.IntervalValue, item.IntervalUnit);
+                    int interval = AppWatchTiming.GetGuardIntervalMilliseconds(item.IntervalValue, item.IntervalUnit);
                     bool due = force
                         || !_lastAppWatchChecks.TryGetValue(key, out last)
                         || (now - last).TotalMilliseconds >= interval;
@@ -188,12 +188,6 @@ namespace WinZoneTrigger
             if (_appWatchInProgress)
             {
                 AppendLog(reason + " 건너뜀: 이전 확인이 아직 진행 중입니다.");
-                return;
-            }
-
-            if (_scanInProgress)
-            {
-                AppendLog(reason + " 건너뜀: 위치 조건 확인이 아직 진행 중입니다.");
                 return;
             }
 
@@ -434,7 +428,7 @@ namespace WinZoneTrigger
                 return null;
             }
 
-            int interval = GetAppWatchIntervalMilliseconds(item.IntervalValue, item.IntervalUnit);
+            int interval = AppWatchTiming.GetGuardIntervalMilliseconds(item.IntervalValue, item.IntervalUnit);
             DateTime lastUtc;
             string key = BuildAppWatchStatusKey(zone.Id, item.Id);
             if (!string.IsNullOrWhiteSpace(key) && _lastAppWatchChecks.TryGetValue(key, out lastUtc))
@@ -487,7 +481,7 @@ namespace WinZoneTrigger
                 return null;
             }
 
-            int interval = GetAppWatchIntervalMilliseconds(item.IntervalValue, item.IntervalUnit);
+            int interval = AppWatchTiming.GetGuardIntervalMilliseconds(item.IntervalValue, item.IntervalUnit);
             return checkedAtLocal.AddMilliseconds(interval);
         }
 

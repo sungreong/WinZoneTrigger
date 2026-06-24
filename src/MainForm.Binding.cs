@@ -793,10 +793,10 @@ namespace WinZoneTrigger
             List<int> intervals = _config.Zones
                 .Where(z => z.Enabled)
                 .SelectMany(z => z.GetEnabledAppWatchItems())
-                .Select(item => GetAppWatchIntervalMilliseconds(item.IntervalValue, item.IntervalUnit))
+                .Select(item => AppWatchTiming.GetGuardIntervalMilliseconds(item.IntervalValue, item.IntervalUnit))
                 .ToList();
 
-            return intervals.Count == 0 ? GetAppWatchIntervalMilliseconds(5, "Minutes") : intervals.Min();
+            return intervals.Count == 0 ? AppWatchTiming.DefaultGuardIntervalMilliseconds : intervals.Min();
         }
 
         private static bool IsZoneEligibleForScan(ZoneRule zone, bool startupOnly)

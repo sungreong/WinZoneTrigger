@@ -46,12 +46,6 @@ namespace WinZoneTrigger
                 return;
             }
 
-            if (_scanInProgress)
-            {
-                AppendLog("앱 감시 건너뜀: 위치 조건 확인이 아직 진행 중입니다.");
-                return;
-            }
-
             CaptureCurrentZone();
             CaptureGlobalSettings();
             if (HasAppWatchZones())
@@ -493,13 +487,14 @@ namespace WinZoneTrigger
             bool zoneStateChanged = false;
             bool hadEligibleActiveZone = false;
             bool appWatchZoneBecameActive = false;
+            bool preserveActiveZones = ScanReliability.HasTransientDetectionError(snapshot);
 
             foreach (ZoneRule zone in _config.Zones)
             {
                 zone.Normalize();
                 bool eligible = IsZoneEligibleForScan(zone, startupOnly);
-                bool near = zone.Enabled && ZoneMatches(zone, visibleSsids, currentLocation);
                 bool wasInside = _insideZones.ContainsKey(zone.Id) && _insideZones[zone.Id];
+                bool near = zone.Enabled && (ZoneMatches(zone, visibleSsids, currentLocation) || (preserveActiveZones && wasInside));
                 bool hasEnabledAppWatch = zone.GetEnabledAppWatchItems().Any();
 
                 if (near)

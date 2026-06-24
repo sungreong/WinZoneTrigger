@@ -54,6 +54,28 @@ namespace WinZoneTrigger
         public List<WifiNetwork> VisibleNetworks { get; set; }
     }
 
+    internal static class ScanReliability
+    {
+        public static bool HasTransientDetectionError(ScanSnapshot snapshot)
+        {
+            if (snapshot == null)
+            {
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(snapshot.WifiError))
+            {
+                return true;
+            }
+
+            LocationReadResult location = snapshot.LocationResult;
+            return location != null
+                && location.WasRequested
+                && !location.HasLocation
+                && !string.IsNullOrWhiteSpace(location.Error);
+        }
+    }
+
     internal sealed class LocationInfo
     {
         public double Latitude { get; set; }
