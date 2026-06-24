@@ -673,7 +673,8 @@ namespace WinZoneTrigger
                 .SelectMany(z => z.GetEnabledAppWatchItems())
                 .Select(item => AppWatchTiming.GetGuardIntervalMilliseconds(item.IntervalValue, item.IntervalUnit))
                 .ToList();
-            return intervals.Count == 0 ? AppWatchTiming.DefaultGuardIntervalMilliseconds : intervals.Min();
+            int shortest = intervals.Count == 0 ? AppWatchTiming.DefaultGuardIntervalMilliseconds : intervals.Min();
+            return Math.Min(shortest, AppWatchTiming.GuardPollIntervalMilliseconds);
         }
 
         private static string QuoteCommandArgument(string value)

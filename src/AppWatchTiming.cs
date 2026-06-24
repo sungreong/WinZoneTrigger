@@ -6,6 +6,7 @@ namespace WinZoneTrigger
     {
         private const int DefaultIntervalMilliseconds = 5 * 60 * 1000;
         private const int MaximumGuardGapMilliseconds = 30 * 1000;
+        private const int GuardPollIntervalMillisecondsValue = 5 * 1000;
 
         public static int GetIntervalMilliseconds(int value, string unit)
         {
@@ -22,6 +23,11 @@ namespace WinZoneTrigger
         public static int DefaultGuardIntervalMilliseconds
         {
             get { return Math.Min(DefaultIntervalMilliseconds, MaximumGuardGapMilliseconds); }
+        }
+
+        public static int GuardPollIntervalMilliseconds
+        {
+            get { return GuardPollIntervalMillisecondsValue; }
         }
     }
 }
