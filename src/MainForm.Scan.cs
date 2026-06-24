@@ -831,6 +831,19 @@ namespace WinZoneTrigger
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             DiagnosticsLog.WriteEvent("폼 종료 요청: reason=" + e.CloseReason + " / exiting=" + _isExiting);
+            DiagnosticsLog.WriteEvent("폼 종료 진단: " + WindowCloseDiagnostics.Describe(this));
+            if (!_automationEnabled
+                && !_allowSettingsScreenClose
+                && e.CloseReason != CloseReason.WindowsShutDown)
+            {
+                e.Cancel = true;
+                DiagnosticsLog.WriteEvent("설정 화면 닫기 요청 전환: 종료하지 않고 트레이로 숨깁니다.");
+                EnsureTrayIcon();
+                Hide();
+                ShowInTaskbar = false;
+                return;
+            }
+
             _isExiting = true;
             _appWatchRunVersion++;
             _scanTimer.Stop();

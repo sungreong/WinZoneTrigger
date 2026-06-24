@@ -61,6 +61,7 @@ namespace WinZoneTrigger
             menu.Items.Add("설정 화면 종료", null, delegate
             {
                 DiagnosticsLog.WriteEvent("트레이 종료 메뉴 클릭");
+                _allowSettingsScreenClose = true;
                 Close();
             });
             return menu;

@@ -34,6 +34,7 @@ namespace WinZoneTrigger
         private AppConfig _config;
         private bool _loadingSelection;
         private bool _isExiting;
+        private bool _allowSettingsScreenClose;
         private bool _scanInProgress;
         private bool _appWatchInProgress;
         private bool _startupRetryActive;
