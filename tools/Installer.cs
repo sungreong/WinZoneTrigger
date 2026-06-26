@@ -5,6 +5,8 @@ using System.Drawing;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Security;
+using System.Security.Principal;
 using System.Windows.Forms;
 
 internal static class InstallerProgram
@@ -367,12 +369,12 @@ internal static class InstallerProgram
             if (registerStartup)
             {
                 Log(log, "Windows 시작 시 자동 실행을 등록합니다.");
-                SetRunKey(true);
+                SetStartupRegistration(true, log);
             }
             else
             {
                 Log(log, "Windows 시작 시 자동 실행을 해제합니다.");
-                SetRunKey(false);
+                SetStartupRegistration(false, log);
             }
 
             Log(log, "프로그램 제거 항목을 등록합니다.");
@@ -397,7 +399,7 @@ internal static class InstallerProgram
             StopRunningApp();
 
             Log(log, "Windows 시작 자동 실행을 제거합니다.");
-            SetRunKey(false);
+            SetStartupRegistration(false, log);
 
             Log(log, "시작 메뉴 바로가기를 제거합니다.");
             DeleteDirectoryIfExists(Paths.StartMenuDir);
@@ -453,6 +455,81 @@ internal static class InstallerProgram
             }
         }
 
+        private static void SetStartupRegistration(bool enabled, Action<string> log)
+        {
+            DeleteScheduledTask();
+            SetRunKey(false);
+
+            if (!enabled)
+            {
+                return;
+            }
+
+            try
+            {
+                CreateScheduledTask();
+                Log(log, "작업 스케줄러 자동 시작을 등록했습니다.");
+            }
+            catch (Exception ex)
+            {
+                Log(log, "작업 스케줄러 등록 실패, Run 레지스트리로 대체합니다: " + ex.Message);
+                SetRunKey(true);
+            }
+        }
+
+        private static void CreateScheduledTask()
+        {
+            string xmlPath = Path.Combine(Path.GetTempPath(), "WinZoneTrigger.task." + Guid.NewGuid().ToString("N") + ".xml");
+            try
+            {
+                File.WriteAllText(xmlPath, BuildScheduledTaskXml(), System.Text.Encoding.Unicode);
+                CommandResult result = RunCommand(
+                    Path.Combine(Environment.SystemDirectory, "schtasks.exe"),
+                    "/Create /F /TN " + Quote(AppName) + " /XML " + Quote(xmlPath),
+                    15000);
+                if (!result.Succeeded)
+                {
+                    throw new InvalidOperationException(result.Summary);
+                }
+            }
+            finally
+            {
+                try
+                {
+                    if (File.Exists(xmlPath))
+                    {
+                        File.Delete(xmlPath);
+                    }
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        private static void DeleteScheduledTask()
+        {
+            RunCommand(Path.Combine(Environment.SystemDirectory, "schtasks.exe"), "/Delete /F /TN " + Quote(AppName), 15000);
+        }
+
+        private static string BuildScheduledTaskXml()
+        {
+            string userId = WindowsIdentity.GetCurrent() == null ? "" : WindowsIdentity.GetCurrent().Name;
+            return "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\r\n"
+                + "<Task version=\"1.4\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\r\n"
+                + "  <RegistrationInfo><Author>" + XmlEscape(userId) + "</Author></RegistrationInfo>\r\n"
+                + "  <Triggers><LogonTrigger><Enabled>true</Enabled><Delay>PT30S</Delay></LogonTrigger></Triggers>\r\n"
+                + "  <Principals><Principal id=\"Author\"><UserId>" + XmlEscape(userId) + "</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>\r\n"
+                + "  <Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><AllowHardTerminate>true</AllowHardTerminate><StartWhenAvailable>true</StartWhenAvailable><RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable><IdleSettings><StopOnIdleEnd>false</StopOnIdleEnd><RestartOnIdle>false</RestartOnIdle></IdleSettings><AllowStartOnDemand>true</AllowStartOnDemand><Enabled>true</Enabled><Hidden>false</Hidden><RunOnlyIfIdle>false</RunOnlyIfIdle><WakeToRun>false</WakeToRun><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><Priority>7</Priority><RestartOnFailure><Interval>PT1M</Interval><Count>3</Count></RestartOnFailure></Settings>\r\n"
+                + "  <Actions Context=\"Author\"><Exec><Command>" + XmlEscape(Paths.InstallExe) + "</Command><Arguments>--startup --minimized</Arguments><WorkingDirectory>" + XmlEscape(Paths.InstallDir) + "</WorkingDirectory></Exec></Actions>\r\n"
+                + "</Task>\r\n";
+        }
+
+        private static string XmlEscape(string value)
+        {
+            return SecurityElement.Escape(value ?? "") ?? "";
+        }
+
         private static void SetRunKey(bool enabled)
         {
             using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))
@@ -470,6 +547,88 @@ internal static class InstallerProgram
                 {
                     key.DeleteValue(AppName, false);
                 }
+            }
+        }
+
+        private static CommandResult RunCommand(string fileName, string arguments, int timeoutMilliseconds)
+        {
+            CommandResult result = new CommandResult { ExitCode = -1, Output = "", Error = "" };
+            try
+            {
+                ProcessStartInfo startInfo = new ProcessStartInfo();
+                startInfo.FileName = fileName;
+                startInfo.Arguments = arguments;
+                startInfo.UseShellExecute = false;
+                startInfo.RedirectStandardOutput = true;
+                startInfo.RedirectStandardError = true;
+                startInfo.CreateNoWindow = true;
+                using (Process process = Process.Start(startInfo))
+                {
+                    if (process == null)
+                    {
+                        result.Error = "프로세스를 시작하지 못했습니다.";
+                        return result;
+                    }
+                    if (!process.WaitForExit(timeoutMilliseconds))
+                    {
+                        result.TimedOut = true;
+                        try { process.Kill(); } catch { }
+                    }
+                    result.Output = process.StandardOutput.ReadToEnd();
+                    result.Error = process.StandardError.ReadToEnd();
+                    if (!result.TimedOut)
+                    {
+                        result.ExitCode = process.ExitCode;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                result.Error = ex.Message;
+            }
+
+            return result;
+        }
+
+        private sealed class CommandResult
+        {
+            public int ExitCode { get; set; }
+            public bool TimedOut { get; set; }
+            public string Output { get; set; }
+            public string Error { get; set; }
+            public bool Succeeded
+            {
+                get { return !TimedOut && ExitCode == 0; }
+            }
+            public string Summary
+            {
+                get
+                {
+                    if (TimedOut)
+                    {
+                        return "시간 초과";
+                    }
+                    string text = FirstLine(Output);
+                    if (string.IsNullOrWhiteSpace(text))
+                    {
+                        text = FirstLine(Error);
+                    }
+                    if (string.IsNullOrWhiteSpace(text))
+                    {
+                        text = "종료 코드 " + ExitCode;
+                    }
+                    return "종료 코드 " + ExitCode + " / " + text;
+                }
+            }
+
+            private static string FirstLine(string text)
+            {
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    return "";
+                }
+                string[] lines = text.Replace("\r", "\n").Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                return lines.Length == 0 ? "" : lines[0].Trim();
             }
         }
 

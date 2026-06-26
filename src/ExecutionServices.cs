@@ -12,6 +12,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Security;
+using System.Security.Principal;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using System.Xml;
@@ -20,16 +22,23 @@ namespace WinZoneTrigger
 {
     internal static class ZoneExecutor
     {
-        public static void Execute(ZoneRule zone, Action<string> log)
+        public static ZoneExecutionResult Execute(ZoneRule zone, Action<string> log)
         {
             if (log == null)
             {
                 log = delegate { };
             }
 
+            ZoneExecutionResult executionResult = new ZoneExecutionResult
+            {
+                ZoneId = zone == null ? "" : zone.Id,
+                ZoneName = zone == null ? "" : zone.Name
+            };
+
             log("동작 실행 시작: " + zone.Name);
             bool wifiConnectRequested = zone.ConnectWifiEnabled.GetValueOrDefault(false);
             bool wifiConnectSucceeded = !wifiConnectRequested;
+            executionResult.WifiConnectionRequested = wifiConnectRequested;
 
             try
             {
@@ -42,8 +51,10 @@ namespace WinZoneTrigger
                     else
                     {
                         string ssid = string.IsNullOrWhiteSpace(zone.ConnectSsid) ? zone.ConnectProfile : zone.ConnectSsid;
-                        CommandResult connectResult = WifiActions.Connect(zone.ConnectProfile, ssid);
+                        WifiConnectionResult connectResult = WifiActions.Connect(zone.ConnectProfile, ssid);
                         wifiConnectSucceeded = connectResult.Succeeded;
+                        executionResult.WifiConnectionVerified = connectResult.Verified;
+                        executionResult.ConnectedSsid = connectResult.ConnectedSsid;
                         log((connectResult.Succeeded ? "Wi-Fi 연결 성공: " : "Wi-Fi 연결 실패: ") + ssid + " -> " + connectResult.Summary);
                         if (connectResult.Succeeded)
                         {
@@ -125,12 +136,22 @@ namespace WinZoneTrigger
             }
 
             log("동작 실행 종료: " + zone.Name);
+            return executionResult;
         }
+    }
+
+    internal sealed class ZoneExecutionResult
+    {
+        public string ZoneId { get; set; }
+        public string ZoneName { get; set; }
+        public bool WifiConnectionRequested { get; set; }
+        public bool WifiConnectionVerified { get; set; }
+        public string ConnectedSsid { get; set; }
     }
 
     internal static class WifiActions
     {
-        public static CommandResult Connect(string profileName, string ssid)
+        public static WifiConnectionResult Connect(string profileName, string ssid)
         {
             string arguments = "wlan connect name=" + Quote(profileName);
             if (!string.IsNullOrWhiteSpace(ssid))
@@ -138,12 +159,109 @@ namespace WinZoneTrigger
                 arguments += " ssid=" + Quote(ssid);
             }
 
-            return CommandRunner.Run(Path.Combine(Environment.SystemDirectory, "netsh.exe"), arguments, 15000);
+            CommandResult request = CommandRunner.Run(Path.Combine(Environment.SystemDirectory, "netsh.exe"), arguments, 15000);
+            WifiConnectionResult result = new WifiConnectionResult
+            {
+                RequestResult = request,
+                TargetSsid = ssid ?? ""
+            };
+
+            if (!request.Succeeded)
+            {
+                result.VerificationSummary = "연결 요청 실패";
+                return result;
+            }
+
+            if (string.IsNullOrWhiteSpace(ssid))
+            {
+                result.Verified = true;
+                result.VerificationSummary = "대상 SSID가 없어 연결 요청 성공만 확인했습니다.";
+                return result;
+            }
+
+            DateTime deadline = DateTime.UtcNow.AddSeconds(30);
+            while (DateTime.UtcNow < deadline)
+            {
+                string connectedSsid = GetConnectedSsid();
+                if (!string.IsNullOrWhiteSpace(connectedSsid))
+                {
+                    result.ConnectedSsid = connectedSsid;
+                    if (string.Equals(connectedSsid, ssid, StringComparison.OrdinalIgnoreCase))
+                    {
+                        result.Verified = true;
+                        result.VerificationSummary = "현재 연결 SSID 확인: " + connectedSsid;
+                        return result;
+                    }
+                }
+
+                Thread.Sleep(1000);
+            }
+
+            result.VerificationSummary = string.IsNullOrWhiteSpace(result.ConnectedSsid)
+                ? "30초 안에 현재 연결 SSID를 확인하지 못했습니다."
+                : "30초 뒤 현재 연결 SSID가 다릅니다: " + result.ConnectedSsid;
+            return result;
+        }
+
+        private static string GetConnectedSsid()
+        {
+            CommandResult show = CommandRunner.Run(Path.Combine(Environment.SystemDirectory, "netsh.exe"), "wlan show interfaces", 10000);
+            if (!show.Succeeded)
+            {
+                return "";
+            }
+
+            string text = (show.Output ?? "") + Environment.NewLine + (show.Error ?? "");
+            string[] lines = text.Replace("\r", "\n").Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string line in lines)
+            {
+                string trimmed = line.Trim();
+                if (trimmed.StartsWith("BSSID", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                Match match = Regex.Match(trimmed, @"^SSID\s*:\s*(.+)$", RegexOptions.IgnoreCase);
+                if (match.Success)
+                {
+                    string value = match.Groups[1].Value.Trim();
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        return value;
+                    }
+                }
+            }
+
+            return "";
         }
 
         private static string Quote(string value)
         {
             return "\"" + (value ?? "").Replace("\"", "\\\"") + "\"";
+        }
+    }
+
+    internal sealed class WifiConnectionResult
+    {
+        public CommandResult RequestResult { get; set; }
+        public string TargetSsid { get; set; }
+        public bool Verified { get; set; }
+        public string ConnectedSsid { get; set; }
+        public string VerificationSummary { get; set; }
+
+        public bool Succeeded
+        {
+            get { return RequestResult != null && RequestResult.Succeeded && Verified; }
+        }
+
+        public string Summary
+        {
+            get
+            {
+                string requestSummary = RequestResult == null ? "연결 요청 결과 없음" : RequestResult.Summary;
+                string verifySummary = string.IsNullOrWhiteSpace(VerificationSummary) ? "연결 확인 정보 없음" : VerificationSummary;
+                return requestSummary + " / " + verifySummary;
+            }
         }
     }
 
@@ -452,6 +570,26 @@ namespace WinZoneTrigger
             return modes.Count == 0 ? "미등록" : string.Join(", ", modes.ToArray());
         }
 
+        public static void EnsurePreferredRegistration(bool startMinimized)
+        {
+            if (!IsRunKeyEnabled() || IsScheduledTaskEnabled())
+            {
+                return;
+            }
+
+            try
+            {
+                CreateScheduledTask(startMinimized);
+                DeleteRunKey();
+                DeleteStartupShortcut();
+                DiagnosticsLog.WriteEvent("자동 시작 자가 복구: Run 레지스트리를 작업 스케줄러로 이전했습니다.");
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsLog.WriteEvent("자동 시작 자가 복구 실패: " + ex.Message);
+            }
+        }
+
         public static void SetEnabled(bool enabled, bool startMinimized)
         {
             if (!enabled)
@@ -488,16 +626,28 @@ namespace WinZoneTrigger
 
         private static void CreateScheduledTask(bool startMinimized)
         {
-            string taskRun = BuildStartupCommand(startMinimized);
-            string schtasksArguments =
-                "/Create /F /SC ONLOGON /TN " + Quote(TaskName) +
-                " /TR " + Quote(taskRun) +
-                " /RL LIMITED";
-
-            CommandResult result = RunSchtasks(schtasksArguments);
-            if (!result.Succeeded)
+            string xmlPath = Path.Combine(Path.GetTempPath(), "WinZoneTrigger.task." + Guid.NewGuid().ToString("N") + ".xml");
+            try
             {
-                throw new InvalidOperationException("작업 스케줄러 등록 실패: " + result.Summary);
+                File.WriteAllText(xmlPath, BuildScheduledTaskXml(startMinimized), Encoding.Unicode);
+                CommandResult result = RunSchtasks("/Create /F /TN " + Quote(TaskName) + " /XML " + Quote(xmlPath));
+                if (!result.Succeeded)
+                {
+                    throw new InvalidOperationException("작업 스케줄러 등록 실패: " + result.Summary);
+                }
+            }
+            finally
+            {
+                try
+                {
+                    if (File.Exists(xmlPath))
+                    {
+                        File.Delete(xmlPath);
+                    }
+                }
+                catch
+                {
+                }
             }
         }
 
@@ -556,6 +706,28 @@ namespace WinZoneTrigger
         private static string BuildStartupCommand(bool startMinimized)
         {
             return Quote(Application.ExecutablePath) + (startMinimized ? " --startup --minimized" : " --startup");
+        }
+
+        private static string BuildScheduledTaskXml(bool startMinimized)
+        {
+            string exePath = Application.ExecutablePath;
+            string arguments = startMinimized ? "--startup --minimized" : "--startup";
+            string workingDirectory = Path.GetDirectoryName(exePath) ?? "";
+            string userId = WindowsIdentity.GetCurrent() == null ? "" : WindowsIdentity.GetCurrent().Name;
+
+            return "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\r\n"
+                + "<Task version=\"1.4\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\r\n"
+                + "  <RegistrationInfo><Author>" + XmlEscape(userId) + "</Author></RegistrationInfo>\r\n"
+                + "  <Triggers><LogonTrigger><Enabled>true</Enabled><Delay>PT30S</Delay></LogonTrigger></Triggers>\r\n"
+                + "  <Principals><Principal id=\"Author\"><UserId>" + XmlEscape(userId) + "</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>\r\n"
+                + "  <Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><AllowHardTerminate>true</AllowHardTerminate><StartWhenAvailable>true</StartWhenAvailable><RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable><IdleSettings><StopOnIdleEnd>false</StopOnIdleEnd><RestartOnIdle>false</RestartOnIdle></IdleSettings><AllowStartOnDemand>true</AllowStartOnDemand><Enabled>true</Enabled><Hidden>false</Hidden><RunOnlyIfIdle>false</RunOnlyIfIdle><WakeToRun>false</WakeToRun><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><Priority>7</Priority><RestartOnFailure><Interval>PT1M</Interval><Count>3</Count></RestartOnFailure></Settings>\r\n"
+                + "  <Actions Context=\"Author\"><Exec><Command>" + XmlEscape(exePath) + "</Command><Arguments>" + XmlEscape(arguments) + "</Arguments><WorkingDirectory>" + XmlEscape(workingDirectory) + "</WorkingDirectory></Exec></Actions>\r\n"
+                + "</Task>\r\n";
+        }
+
+        private static string XmlEscape(string value)
+        {
+            return SecurityElement.Escape(value ?? "") ?? "";
         }
 
         private static string GetShortcutPath()

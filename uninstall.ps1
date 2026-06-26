@@ -4,9 +4,12 @@ $installDir = Join-Path $env:LOCALAPPDATA 'Programs\WinZoneTrigger'
 $startMenuDir = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\WinZoneTrigger'
 $runKeyPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $runValueName = 'WinZoneTrigger'
+$taskName = 'WinZoneTrigger'
 $oldStartupShortcut = Join-Path ([Environment]::GetFolderPath('Startup')) 'WinZoneTrigger.lnk'
 
 Get-Process WinZoneTrigger -ErrorAction SilentlyContinue | Stop-Process -Force
+
+& schtasks.exe /Delete /F /TN $taskName 2>$null | Out-Null
 
 if (Test-Path $runKeyPath) {
     Remove-ItemProperty -Path $runKeyPath -Name $runValueName -ErrorAction SilentlyContinue

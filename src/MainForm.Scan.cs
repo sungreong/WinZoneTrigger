@@ -318,7 +318,7 @@ namespace WinZoneTrigger
             Task.Factory.StartNew(delegate
             {
                 return WifiActions.Connect(profile, ssid);
-            }).ContinueWith(delegate(Task<CommandResult> task)
+            }).ContinueWith(delegate(Task<WifiConnectionResult> task)
             {
                 if (task.IsFaulted)
                 {

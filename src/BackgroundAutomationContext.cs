@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using Microsoft.Win32;
@@ -11,13 +12,16 @@ using System.Windows.Forms;
 
 namespace WinZoneTrigger
 {
-    internal sealed class BackgroundAutomationContext : ApplicationContext
+    internal sealed partial class BackgroundAutomationContext : ApplicationContext
     {
         private readonly Dictionary<string, bool> _insideZones =
             new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, DateTime> _lastAppWatchChecks =
             new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _startupTriggeredZoneIds =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly object _automationStateLock = new object();
+        private readonly object _actionQueueLock = new object();
         private readonly System.Windows.Forms.Timer _scanTimer;
         private readonly System.Windows.Forms.Timer _appWatchTimer;
         private readonly System.Windows.Forms.Timer _startupRetryTimer;
@@ -28,9 +32,11 @@ namespace WinZoneTrigger
         private DateTime _configLastWriteUtc;
         private bool _scanInProgress;
         private bool _appWatchInProgress;
+        private volatile bool _zoneActionInProgress;
         private bool _startupRetryActive;
         private int _startupRetryAttemptsRemaining;
         private int _startupRetryAttemptsTotal;
+        private Task _lastZoneActionTask;
         private List<string> _stateActiveZoneIds = new List<string>();
         private List<string> _stateActiveZoneNames = new List<string>();
         private LocationInfo _stateCurrentLocation;
@@ -150,6 +156,7 @@ namespace WinZoneTrigger
             _startupRetryAttemptsTotal = 12;
             _startupRetryAttemptsRemaining = _startupRetryAttemptsTotal;
             _startupRetryActive = true;
+            _startupTriggeredZoneIds.Clear();
             _startupRetryTimer.Stop();
             DiagnosticsLog.WriteEvent("백그라운드 부팅 초기 확인 시작: 최대 " + _startupRetryAttemptsTotal + "회");
             RunStartupRetryAttempt();
@@ -174,13 +181,13 @@ namespace WinZoneTrigger
                 return;
             }
 
-            if (HasActiveStartupRunOnceZone())
+            if (AllStartupRunOnceZonesTriggered())
             {
-                StopStartupRetry("활성 위치가 인식되어 부팅 초기 확인을 종료합니다.");
+                StopStartupRetry("시작 시 1회 실행 대상 위치 처리가 완료되어 부팅 초기 확인을 종료합니다.");
                 return;
             }
 
-            if (_scanInProgress || _appWatchInProgress)
+            if (_scanInProgress || _appWatchInProgress || _zoneActionInProgress)
             {
                 DiagnosticsLog.WriteEvent("백그라운드 부팅 초기 확인 대기: 다른 자동 작업 진행 중");
                 _startupRetryTimer.Start();
@@ -249,8 +256,7 @@ namespace WinZoneTrigger
 
             if (_startupRetryActive)
             {
-                DiagnosticsLog.WriteEvent("백그라운드 앱 감시 대기: 부팅 초기 확인 진행 중");
-                return;
+                DiagnosticsLog.WriteEvent("백그라운드 앱 감시: 부팅 초기 확인과 병행합니다.");
             }
 
             bool resumeDetected = ConsumePowerResumeDetected();
@@ -260,7 +266,7 @@ namespace WinZoneTrigger
         private void StartScan(bool forceScan, bool startupOnly)
         {
             ReloadConfigIfChanged();
-            if (_scanInProgress || _appWatchInProgress)
+            if (_scanInProgress || _appWatchInProgress || _zoneActionInProgress)
             {
                 DiagnosticsLog.WriteEvent("백그라운드 위치 확인 건너뜀: 다른 자동 작업 진행 중");
                 return;
@@ -384,17 +390,37 @@ namespace WinZoneTrigger
 
             List<string> activeZoneIds = new List<string>();
             List<string> activeZoneNames = new List<string>();
-            bool hadEligibleStartupZone = false;
             bool preserveActiveZones = ScanReliability.HasTransientDetectionError(snapshot);
+            List<ZoneRule> zonesToTrigger = new List<ZoneRule>();
+            List<string> deferredStartupZones = new List<string>();
+
+            DiagnosticsLog.WriteEvent("백그라운드 scan 요약: Wi-Fi="
+                + FormatVisibleSsids(visibleSsids)
+                + " / 위치=" + FormatLocationForLog(currentLocation)
+                + " / startupOnly=" + startupOnly);
 
             foreach (ZoneRule zone in _config.Zones)
             {
                 zone.Normalize();
                 bool wasInside = IsZoneActive(zone);
-                bool near = zone.Enabled && (ZoneMatches(zone, visibleSsids, currentLocation) || (preserveActiveZones && wasInside));
+                ZoneMatchResult match = AnalyzeZoneMatch(zone, visibleSsids, currentLocation, startupOnly);
+                bool near = zone.Enabled && (match.Matches || (preserveActiveZones && wasInside));
                 bool eligible = startupOnly
                     ? zone.RunOnceAtStartup.GetValueOrDefault(true)
                     : zone.MonitoringEnabled.GetValueOrDefault(false);
+
+                if (match.DeferredForStartupWifi)
+                {
+                    near = false;
+                    deferredStartupZones.Add(zone.Name);
+                }
+
+                DiagnosticsLog.WriteEvent("백그라운드 위치 판정: " + zone.Name
+                    + " / enabled=" + zone.Enabled
+                    + " / eligible=" + eligible
+                    + " / activeBefore=" + wasInside
+                    + " / near=" + near
+                    + " / reason=" + match.Reason);
 
                 if (near && !wasInside)
                 {
@@ -402,7 +428,11 @@ namespace WinZoneTrigger
                     DiagnosticsLog.WriteEvent("백그라운드 위치 진입: " + zone.Name);
                     if (eligible)
                     {
-                        TriggerZone(zone.Clone(), startupOnly ? "백그라운드 Windows 시작 후 한 번 실행" : "백그라운드 조건 진입 시 실행");
+                        zonesToTrigger.Add(zone.Clone());
+                        if (startupOnly)
+                        {
+                            _startupTriggeredZoneIds.Add(zone.Id);
+                        }
                     }
                     if (zone.GetEnabledAppWatchItems().Any())
                     {
@@ -420,21 +450,26 @@ namespace WinZoneTrigger
                     activeZoneIds.Add(zone.Id);
                     activeZoneNames.Add(zone.Name);
                 }
+            }
 
-                if (startupOnly && near && eligible)
-                {
-                    hadEligibleStartupZone = true;
-                }
+            LogConflictingWifiActions(zonesToTrigger);
+            foreach (ZoneRule zone in zonesToTrigger)
+            {
+                TriggerZone(zone, startupOnly ? "백그라운드 Windows 시작 후 한 번 실행" : "백그라운드 조건 진입 시 실행");
             }
 
             SaveAutomationState(activeZoneIds, activeZoneNames, snapshot, visibleSsids, currentLocation, "백그라운드 위치 조건 확인 완료");
-            if (startupOnly && _startupRetryActive && hadEligibleStartupZone)
+            if (startupOnly && _startupRetryActive && AllStartupRunOnceZonesTriggered())
             {
-                StopStartupRetry("활성 위치가 인식되어 부팅 초기 확인을 종료합니다.");
+                StopStartupRetry("시작 시 1회 실행 대상 위치 처리가 완료되어 부팅 초기 확인을 종료합니다.");
             }
             else if (startupOnly && _startupRetryActive && _startupRetryAttemptsRemaining <= 0 && !_scanInProgress)
             {
                 StopStartupRetry("활성 위치를 찾지 못해 부팅 초기 확인을 종료합니다.");
+            }
+            else if (startupOnly && _startupRetryActive && deferredStartupZones.Count > 0)
+            {
+                DiagnosticsLog.WriteEvent("부팅 초기 확인 유지: Wi-Fi 확인 대기 위치=" + string.Join(", ", deferredStartupZones.ToArray()));
             }
         }
 
@@ -443,18 +478,70 @@ namespace WinZoneTrigger
             string startMessage = reason + ": " + zone.Name;
             DiagnosticsLog.WriteEvent(startMessage);
             UpdateAutomationEvent(startMessage, "동작 실행 중: " + zone.Name, null);
+            EnqueueZoneAction(zone, reason);
+        }
+
+        private void EnqueueZoneAction(ZoneRule zone, string reason)
+        {
+            lock (_actionQueueLock)
+            {
+                Task previous = _lastZoneActionTask;
+                _lastZoneActionTask = Task.Factory.StartNew(delegate
+                {
+                    if (previous != null)
+                    {
+                        try
+                        {
+                            previous.Wait();
+                        }
+                        catch
+                        {
+                        }
+                    }
+
+                    _zoneActionInProgress = true;
+                    try
+                    {
+                        ZoneExecutionResult result = ZoneExecutor.Execute(zone, DiagnosticsLog.WriteEvent);
+                        UpdateAutomationEvent("동작 실행 완료: " + zone.Name, "완료: " + zone.Name, null);
+                        if (result != null && result.WifiConnectionVerified)
+                        {
+                            QueueFollowUpScan("Wi-Fi 연결 확인 후 follow-up scan: " + result.ConnectedSsid);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        DiagnosticsLog.Write("백그라운드 동작 실행 실패: " + (zone == null ? "" : zone.Name), ex);
+                        UpdateAutomationEvent("백그라운드 동작 실행 실패: " + (zone == null ? "" : zone.Name), "실패: " + (zone == null ? "" : zone.Name), null);
+                    }
+                    finally
+                    {
+                        _zoneActionInProgress = false;
+                    }
+                });
+            }
+        }
+
+        private void QueueFollowUpScan(string reason)
+        {
+            DiagnosticsLog.WriteEvent(reason);
             Task.Factory.StartNew(delegate
             {
-                try
+                for (int attempt = 1; attempt <= 6; attempt++)
                 {
-                    ZoneExecutor.Execute(zone, DiagnosticsLog.WriteEvent);
-                    UpdateAutomationEvent("동작 실행 완료: " + zone.Name, "완료: " + zone.Name, null);
+                    Thread.Sleep(3000);
+                    if (_scanInProgress || _appWatchInProgress || _zoneActionInProgress)
+                    {
+                        DiagnosticsLog.WriteEvent("follow-up scan 대기: 다른 자동 작업 진행 중 (" + attempt + "/6)");
+                        continue;
+                    }
+
+                    DiagnosticsLog.WriteEvent("follow-up scan 실행: Wi-Fi 연결 이후 조건 재확인");
+                    StartScan(true, false);
+                    return;
                 }
-                catch (Exception ex)
-                {
-                    DiagnosticsLog.Write("백그라운드 동작 실행 실패: " + (zone == null ? "" : zone.Name), ex);
-                    UpdateAutomationEvent("백그라운드 동작 실행 실패: " + (zone == null ? "" : zone.Name), "실패: " + (zone == null ? "" : zone.Name), null);
-                }
+
+                DiagnosticsLog.WriteEvent("follow-up scan 포기: 자동 작업이 계속 진행 중입니다.");
             });
         }
 
@@ -554,52 +641,6 @@ namespace WinZoneTrigger
                     _appWatchInProgress = false;
                 }
             });
-        }
-
-        private bool ZoneMatches(ZoneRule zone, HashSet<string> visibleSsids, LocationInfo currentLocation)
-        {
-            bool coordinateMatch = false;
-            if (zone.UseCoordinates)
-            {
-                coordinateMatch = currentLocation != null
-                    && GeoMath.DistanceMeters(
-                        currentLocation.Latitude,
-                        currentLocation.Longitude,
-                        zone.Latitude,
-                        zone.Longitude) <= zone.RadiusMeters;
-            }
-
-            List<string> wanted = zone.NearbySsids
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .Select(s => s.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            bool wifiMatch = false;
-            if (zone.UseWifiCondition.GetValueOrDefault(false) && wanted.Count > 0)
-            {
-                wifiMatch = zone.RequireAllSsids
-                    ? wanted.All(visibleSsids.Contains)
-                    : wanted.Any(visibleSsids.Contains);
-            }
-
-            return coordinateMatch || wifiMatch;
-        }
-
-        private bool IsZoneActive(ZoneRule zone)
-        {
-            bool active;
-            return zone != null
-                && !string.IsNullOrWhiteSpace(zone.Id)
-                && _insideZones.TryGetValue(zone.Id, out active)
-                && active;
-        }
-
-        private bool HasActiveStartupRunOnceZone()
-        {
-            return _config.Zones.Any(z => z.Enabled
-                && z.RunOnceAtStartup.GetValueOrDefault(true)
-                && IsZoneActive(z));
         }
 
         private bool HasStartupRunOnceZones()
@@ -824,6 +865,15 @@ namespace WinZoneTrigger
             return "확인 " + checkedAtLocal.ToString("yyyy-MM-dd HH:mm:ss")
                 + " · 다음 앱 확인 " + nextCheckAtLocal.ToString("yyyy-MM-dd HH:mm:ss")
                 + " · " + (summary ?? "");
+        }
+
+        private sealed class ZoneMatchResult
+        {
+            public bool Matches { get; set; }
+            public bool CoordinateMatch { get; set; }
+            public bool WifiMatch { get; set; }
+            public bool DeferredForStartupWifi { get; set; }
+            public string Reason { get; set; }
         }
     }
 }

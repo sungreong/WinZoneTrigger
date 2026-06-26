@@ -62,6 +62,7 @@ namespace WinZoneTrigger
             {
                 bool startMinimized = args != null && args.Any(a => string.Equals(a, "--minimized", StringComparison.OrdinalIgnoreCase));
                 bool startedFromWindowsStartup = args != null && args.Any(a => string.Equals(a, "--startup", StringComparison.OrdinalIgnoreCase));
+                TryRepairStartupRegistration();
                 if (startMinimized)
                 {
                     if (!TryAcquireSingleInstance(@"Local\WinZoneTrigger.BackgroundInstance", "백그라운드"))
@@ -185,6 +186,20 @@ namespace WinZoneTrigger
         private static bool HasArgument(string[] args, string value)
         {
             return args != null && args.Any(a => string.Equals(a, value, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static void TryRepairStartupRegistration()
+        {
+            try
+            {
+                AppConfig config = ConfigStore.Load();
+                config.Normalize();
+                StartupManager.EnsurePreferredRegistration(config.StartMinimized);
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsLog.Write("자동 시작 등록 자가 복구 확인 실패", ex);
+            }
         }
 
         private static void EnsureBackgroundAutomationStartedForSettings()
