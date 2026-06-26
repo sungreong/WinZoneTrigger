@@ -269,7 +269,10 @@ internal static class InstallerProgram
 
         private void InstallButtonClick(object sender, EventArgs e)
         {
-            RunUiAction("설치", () => InstallerActions.Install(_startupCheck.Checked, _launchCheck.Checked, Log));
+            if (RunUiAction("설치", () => InstallerActions.Install(_startupCheck.Checked, _launchCheck.Checked, Log)))
+            {
+                Close();
+            }
         }
 
         private void UninstallButtonClick(object sender, EventArgs e)
@@ -280,10 +283,13 @@ internal static class InstallerProgram
                 return;
             }
 
-            RunUiAction("제거", () => InstallerActions.Uninstall(Log));
+            if (RunUiAction("제거", () => InstallerActions.Uninstall(Log)))
+            {
+                Close();
+            }
         }
 
-        private void RunUiAction(string name, Action action)
+        private bool RunUiAction(string name, Action action)
         {
             SetBusy(true);
             try
@@ -291,11 +297,13 @@ internal static class InstallerProgram
                 action();
                 Log(name + " 완료");
                 MessageBox.Show(name + "가 완료되었습니다.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return true;
             }
             catch (Exception ex)
             {
                 Log(name + " 실패: " + ex.Message);
                 MessageBox.Show(ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
             }
             finally
             {
