@@ -5,11 +5,12 @@ using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace WinZoneTrigger
 {
-    internal sealed class SettingsForm : Form
+    internal sealed partial class SettingsForm : Form
     {
         private readonly CheckBox _startupCheck;
         private readonly CheckBox _startMinimizedCheck;
@@ -21,6 +22,16 @@ namespace WinZoneTrigger
         private readonly Label _brightnessVerifyResultLabel;
         private readonly Label _nightLightStatusLabel;
         private readonly CheckBox _trayIconCheck;
+        private readonly System.Windows.Forms.Timer _backgroundStatusTimer;
+        private Label _backgroundHealthValue;
+        private Label _backgroundProcessValue;
+        private Label _backgroundUpdatedValue;
+        private Label _backgroundActiveZonesValue;
+        private Label _backgroundWifiValue;
+        private Label _backgroundLocationValue;
+        private Label _backgroundLastEventValue;
+        private Label _backgroundLastActionValue;
+        private Label _backgroundLastAppWatchValue;
 
         public bool StartupEnabled
         {
@@ -86,11 +97,24 @@ namespace WinZoneTrigger
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             Controls.Add(root);
 
+            TabControl tabs = CreateSettingsTabs();
+            root.Controls.Add(tabs, 0, 0);
+
+            TabPage generalTab = new TabPage("일반 설정");
+            generalTab.BackColor = BackColor;
+            generalTab.Padding = new Padding(0);
+            tabs.TabPages.Add(generalTab);
+
+            TabPage backgroundTab = new TabPage("백그라운드 상태");
+            backgroundTab.BackColor = BackColor;
+            backgroundTab.Padding = new Padding(0);
+            tabs.TabPages.Add(backgroundTab);
+
             Panel contentPanel = new Panel();
             contentPanel.Dock = DockStyle.Fill;
             contentPanel.AutoScroll = true;
             contentPanel.Margin = new Padding(0);
-            root.Controls.Add(contentPanel, 0, 0);
+            generalTab.Controls.Add(contentPanel);
 
             TableLayoutPanel content = new TableLayoutPanel();
             content.AutoSize = true;
@@ -268,6 +292,8 @@ namespace WinZoneTrigger
             diagnosticsPanel.Controls.Add(folderButtons, 0, diagnosticsPanel.RowCount++);
             content.Controls.Add(diagnosticsPanel, 0, content.RowCount++);
 
+            BuildBackgroundStatusTab(backgroundTab);
+
             FlowLayoutPanel buttons = new FlowLayoutPanel();
             buttons.Dock = DockStyle.Fill;
             buttons.FlowDirection = FlowDirection.RightToLeft;
@@ -292,6 +318,23 @@ namespace WinZoneTrigger
 
             AcceptButton = saveButton;
             CancelButton = cancelButton;
+
+            _backgroundStatusTimer = new System.Windows.Forms.Timer();
+            _backgroundStatusTimer.Interval = 5000;
+            _backgroundStatusTimer.Tick += delegate { RefreshBackgroundStatus(); };
+            _backgroundStatusTimer.Start();
+            RefreshBackgroundStatus();
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            if (_backgroundStatusTimer != null)
+            {
+                _backgroundStatusTimer.Stop();
+                _backgroundStatusTimer.Dispose();
+            }
+
+            base.OnFormClosed(e);
         }
 
         private DataGridView CreateBrightnessGrid()
@@ -593,6 +636,51 @@ namespace WinZoneTrigger
             value.Margin = new Padding(0, 2, 0, 2);
             row.Controls.Add(value, 1, 0);
             return row;
+        }
+
+        private Label CreateStatusValueLabel()
+        {
+            Label value = new Label();
+            value.AutoSize = true;
+            value.MaximumSize = new Size(470, 0);
+            value.ForeColor = Color.FromArgb(35, 45, 47);
+            value.BackColor = Color.FromArgb(253, 253, 249);
+            value.Padding = new Padding(8, 4, 8, 4);
+            value.Margin = new Padding(0, 0, 0, 0);
+            return value;
+        }
+
+        private Control CreateStatusValueLine(string labelText, Label valueLabel)
+        {
+            TableLayoutPanel row = new TableLayoutPanel();
+            row.Dock = DockStyle.Top;
+            row.AutoSize = true;
+            row.ColumnCount = 2;
+            row.Margin = new Padding(0, 2, 0, 6);
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+            Label label = new Label();
+            label.Text = labelText;
+            label.AutoSize = true;
+            label.ForeColor = Color.FromArgb(97, 111, 103);
+            label.Font = new Font(Font.FontFamily, 8.75F, FontStyle.Bold, GraphicsUnit.Point);
+            label.Margin = new Padding(0, 6, 8, 2);
+            row.Controls.Add(label, 0, 0);
+            row.Controls.Add(valueLabel, 1, 0);
+            return row;
+        }
+
+        private void SetStatusValue(Label label, string text, bool emphasized)
+        {
+            if (label == null || label.IsDisposed)
+            {
+                return;
+            }
+
+            label.Text = text ?? "";
+            label.BackColor = emphasized ? Color.FromArgb(220, 240, 229) : Color.FromArgb(253, 253, 249);
+            label.ForeColor = emphasized ? Color.FromArgb(20, 91, 69) : Color.FromArgb(35, 45, 47);
         }
 
         private Control CreateNoteLine(string text)
