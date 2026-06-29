@@ -392,7 +392,7 @@ namespace WinZoneTrigger
             List<string> activeZoneNames = new List<string>();
             bool preserveActiveZones = ScanReliability.HasTransientDetectionError(snapshot);
             List<ZoneRule> zonesToTrigger = new List<ZoneRule>();
-            List<string> deferredStartupZones = new List<string>();
+            bool startupWifiMatchedZoneExists = startupOnly && HasEligibleStartupWifiMatch(visibleSsids, currentLocation);
 
             DiagnosticsLog.WriteEvent("백그라운드 scan 요약: Wi-Fi="
                 + FormatVisibleSsids(visibleSsids)
@@ -408,11 +408,12 @@ namespace WinZoneTrigger
                 bool eligible = startupOnly
                     ? zone.RunOnceAtStartup.GetValueOrDefault(true)
                     : zone.MonitoringEnabled.GetValueOrDefault(false);
+                string reason = match.Reason;
 
-                if (match.DeferredForStartupWifi)
+                if (startupOnly && startupWifiMatchedZoneExists && match.StartupWifiConnectionKickoff && !match.WifiMatch)
                 {
                     near = false;
-                    deferredStartupZones.Add(zone.Name);
+                    reason += "; Wi-Fi 일치 위치 우선으로 좌표 기반 연결 건너뜀";
                 }
 
                 DiagnosticsLog.WriteEvent("백그라운드 위치 판정: " + zone.Name
@@ -420,7 +421,7 @@ namespace WinZoneTrigger
                     + " / eligible=" + eligible
                     + " / activeBefore=" + wasInside
                     + " / near=" + near
-                    + " / reason=" + match.Reason);
+                    + " / reason=" + reason);
 
                 if (near && !wasInside)
                 {
@@ -467,10 +468,6 @@ namespace WinZoneTrigger
             {
                 StopStartupRetry("활성 위치를 찾지 못해 부팅 초기 확인을 종료합니다.");
             }
-            else if (startupOnly && _startupRetryActive && deferredStartupZones.Count > 0)
-            {
-                DiagnosticsLog.WriteEvent("부팅 초기 확인 유지: Wi-Fi 확인 대기 위치=" + string.Join(", ", deferredStartupZones.ToArray()));
-            }
         }
 
         private void TriggerZone(ZoneRule zone, string reason)
@@ -479,6 +476,26 @@ namespace WinZoneTrigger
             DiagnosticsLog.WriteEvent(startMessage);
             UpdateAutomationEvent(startMessage, "동작 실행 중: " + zone.Name, null);
             EnqueueZoneAction(zone, reason);
+        }
+
+        private bool HasEligibleStartupWifiMatch(HashSet<string> visibleSsids, LocationInfo currentLocation)
+        {
+            foreach (ZoneRule zone in _config.Zones)
+            {
+                zone.Normalize();
+                if (!zone.Enabled || !zone.RunOnceAtStartup.GetValueOrDefault(true))
+                {
+                    continue;
+                }
+
+                ZoneMatchResult match = AnalyzeZoneMatch(zone, visibleSsids, currentLocation, true);
+                if (match.WifiMatch)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void EnqueueZoneAction(ZoneRule zone, string reason)
@@ -872,7 +889,7 @@ namespace WinZoneTrigger
             public bool Matches { get; set; }
             public bool CoordinateMatch { get; set; }
             public bool WifiMatch { get; set; }
-            public bool DeferredForStartupWifi { get; set; }
+            public bool StartupWifiConnectionKickoff { get; set; }
             public string Reason { get; set; }
         }
     }

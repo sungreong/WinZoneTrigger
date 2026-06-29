@@ -69,6 +69,13 @@ namespace WinZoneTrigger
                 log("Wi-Fi 연결 실패: " + ex.Message);
             }
 
+            if (wifiConnectRequested && !wifiConnectSucceeded)
+            {
+                log("Wi-Fi 연결 실패로 나머지 동작을 건너뜁니다: " + zone.Name);
+                log("동작 실행 종료: " + zone.Name);
+                return executionResult;
+            }
+
             List<string> chromeUrls = zone.ChromeUrls
                 .Where(u => !string.IsNullOrWhiteSpace(u))
                 .ToList();

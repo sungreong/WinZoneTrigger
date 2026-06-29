@@ -38,7 +38,7 @@ namespace WinZoneTrigger
                     : wanted.Any(visibleSsids.Contains);
             }
 
-            bool coordinateOnlyStartupWifiAction = startupOnly
+            bool startupWifiConnectionKickoff = startupOnly
                 && zone.ConnectWifiEnabled.GetValueOrDefault(false)
                 && zone.UseWifiCondition.GetValueOrDefault(false)
                 && wanted.Count > 0
@@ -57,9 +57,9 @@ namespace WinZoneTrigger
                     ? "Wi-Fi 일치(" + string.Join(", ", wanted.ToArray()) + ")"
                     : "Wi-Fi 미감지(" + string.Join(", ", missing.ToArray()) + ")");
             }
-            if (coordinateOnlyStartupWifiAction)
+            if (startupWifiConnectionKickoff)
             {
-                reasons.Add("부팅 초기 Wi-Fi 연결 동작은 Wi-Fi 확인 전까지 대기");
+                reasons.Add("부팅 초기 Wi-Fi 연결 동작을 좌표 일치로 먼저 실행");
             }
             if (reasons.Count == 0)
             {
@@ -68,10 +68,10 @@ namespace WinZoneTrigger
 
             return new ZoneMatchResult
             {
-                Matches = (coordinateMatch || wifiMatch) && !coordinateOnlyStartupWifiAction,
+                Matches = coordinateMatch || wifiMatch,
                 CoordinateMatch = coordinateMatch,
                 WifiMatch = wifiMatch,
-                DeferredForStartupWifi = coordinateOnlyStartupWifiAction,
+                StartupWifiConnectionKickoff = startupWifiConnectionKickoff,
                 Reason = string.Join("; ", reasons.ToArray())
             };
         }
