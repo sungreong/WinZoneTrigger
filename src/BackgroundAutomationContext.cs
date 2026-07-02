@@ -28,6 +28,7 @@ namespace WinZoneTrigger
         private readonly System.Windows.Forms.Timer _brightnessTimer;
         private readonly PowerStateMonitor _powerStateMonitor;
         private readonly BrightnessScheduleRunner _brightnessScheduleRunner;
+        private readonly SynchronizationContext _uiContext;
         private AppConfig _config;
         private DateTime _configLastWriteUtc;
         private bool _scanInProgress;
@@ -55,6 +56,7 @@ namespace WinZoneTrigger
 
         public BackgroundAutomationContext()
         {
+            _uiContext = SynchronizationContext.Current;
             LoadConfigFromDisk("시작", false);
             _scanTimer = new System.Windows.Forms.Timer();
             _appWatchTimer = new System.Windows.Forms.Timer();
@@ -156,7 +158,10 @@ namespace WinZoneTrigger
             _startupRetryAttemptsTotal = 12;
             _startupRetryAttemptsRemaining = _startupRetryAttemptsTotal;
             _startupRetryActive = true;
-            _startupTriggeredZoneIds.Clear();
+            lock (_startupTriggeredZoneIds)
+            {
+                _startupTriggeredZoneIds.Clear();
+            }
             _startupRetryTimer.Stop();
             DiagnosticsLog.WriteEvent("백그라운드 부팅 초기 확인 시작: 최대 " + _startupRetryAttemptsTotal + "회");
             RunStartupRetryAttempt();
@@ -404,6 +409,7 @@ namespace WinZoneTrigger
                 zone.Normalize();
                 bool wasInside = IsZoneActive(zone);
                 ZoneMatchResult match = AnalyzeZoneMatch(zone, visibleSsids, currentLocation, startupOnly);
+                bool actualNear = zone.Enabled && match.Matches;
                 bool near = zone.Enabled && (match.Matches || (preserveActiveZones && wasInside));
                 bool eligible = startupOnly
                     ? zone.RunOnceAtStartup.GetValueOrDefault(true)
@@ -412,9 +418,13 @@ namespace WinZoneTrigger
 
                 if (startupOnly && startupWifiMatchedZoneExists && match.StartupWifiConnectionKickoff && !match.WifiMatch)
                 {
+                    actualNear = false;
                     near = false;
                     reason += "; Wi-Fi 일치 위치 우선으로 좌표 기반 연결 건너뜀";
                 }
+                bool shouldTrigger = eligible && (startupOnly
+                    ? actualNear && !IsStartupZoneCompleted(zone)
+                    : near && !wasInside);
 
                 DiagnosticsLog.WriteEvent("백그라운드 위치 판정: " + zone.Name
                     + " / enabled=" + zone.Enabled
@@ -423,18 +433,15 @@ namespace WinZoneTrigger
                     + " / near=" + near
                     + " / reason=" + reason);
 
+                if (startupOnly && shouldTrigger && wasInside)
+                {
+                    DiagnosticsLog.WriteEvent("백그라운드 부팅 초기 동작 재시도 대상: " + zone.Name);
+                }
+
                 if (near && !wasInside)
                 {
                     _insideZones[zone.Id] = true;
                     DiagnosticsLog.WriteEvent("백그라운드 위치 진입: " + zone.Name);
-                    if (eligible)
-                    {
-                        zonesToTrigger.Add(zone.Clone());
-                        if (startupOnly)
-                        {
-                            _startupTriggeredZoneIds.Add(zone.Id);
-                        }
-                    }
                     if (zone.GetEnabledAppWatchItems().Any())
                     {
                         RunDueAppWatchChecks(true, "백그라운드 앱 감시 시작 확인");
@@ -451,12 +458,17 @@ namespace WinZoneTrigger
                     activeZoneIds.Add(zone.Id);
                     activeZoneNames.Add(zone.Name);
                 }
+
+                if (shouldTrigger)
+                {
+                    zonesToTrigger.Add(zone.Clone());
+                }
             }
 
             LogConflictingWifiActions(zonesToTrigger);
             foreach (ZoneRule zone in zonesToTrigger)
             {
-                TriggerZone(zone, startupOnly ? "백그라운드 Windows 시작 후 한 번 실행" : "백그라운드 조건 진입 시 실행");
+                TriggerZone(zone, startupOnly ? "백그라운드 Windows 시작 후 한 번 실행" : "백그라운드 조건 진입 시 실행", startupOnly);
             }
 
             SaveAutomationState(activeZoneIds, activeZoneNames, snapshot, visibleSsids, currentLocation, "백그라운드 위치 조건 확인 완료");
@@ -464,18 +476,23 @@ namespace WinZoneTrigger
             {
                 StopStartupRetry("시작 시 1회 실행 대상 위치 처리가 완료되어 부팅 초기 확인을 종료합니다.");
             }
-            else if (startupOnly && _startupRetryActive && _startupRetryAttemptsRemaining <= 0 && !_scanInProgress)
+            else if (startupOnly
+                && _startupRetryActive
+                && _startupRetryAttemptsRemaining <= 0
+                && zonesToTrigger.Count == 0
+                && !_scanInProgress
+                && !_zoneActionInProgress)
             {
                 StopStartupRetry("활성 위치를 찾지 못해 부팅 초기 확인을 종료합니다.");
             }
         }
 
-        private void TriggerZone(ZoneRule zone, string reason)
+        private void TriggerZone(ZoneRule zone, string reason, bool startupOnly)
         {
             string startMessage = reason + ": " + zone.Name;
             DiagnosticsLog.WriteEvent(startMessage);
             UpdateAutomationEvent(startMessage, "동작 실행 중: " + zone.Name, null);
-            EnqueueZoneAction(zone, reason);
+            EnqueueZoneAction(zone, reason, startupOnly);
         }
 
         private bool HasEligibleStartupWifiMatch(HashSet<string> visibleSsids, LocationInfo currentLocation)
@@ -498,7 +515,7 @@ namespace WinZoneTrigger
             return false;
         }
 
-        private void EnqueueZoneAction(ZoneRule zone, string reason)
+        private void EnqueueZoneAction(ZoneRule zone, string reason, bool startupOnly)
         {
             lock (_actionQueueLock)
             {
@@ -520,7 +537,23 @@ namespace WinZoneTrigger
                     try
                     {
                         ZoneExecutionResult result = ZoneExecutor.Execute(zone, DiagnosticsLog.WriteEvent);
-                        UpdateAutomationEvent("동작 실행 완료: " + zone.Name, "완료: " + zone.Name, null);
+                        bool completed = result != null && result.Completed;
+                        UpdateAutomationEvent(
+                            (completed ? "동작 실행 완료: " : "동작 실행 미완료: ") + zone.Name,
+                            (completed ? "완료: " : "미완료: ") + zone.Name,
+                            null);
+                        if (startupOnly)
+                        {
+                            if (completed)
+                            {
+                                MarkStartupZoneCompleted(zone);
+                                DiagnosticsLog.WriteEvent("백그라운드 부팅 초기 동작 완료 표시: " + zone.Name);
+                            }
+                            else
+                            {
+                                DiagnosticsLog.WriteEvent("백그라운드 부팅 초기 동작 미완료, 다음 확인에서 재시도: " + zone.Name);
+                            }
+                        }
                         if (result != null && result.WifiConnectionVerified)
                         {
                             QueueFollowUpScan("Wi-Fi 연결 확인 후 follow-up scan: " + result.ConnectedSsid);
@@ -534,9 +567,41 @@ namespace WinZoneTrigger
                     finally
                     {
                         _zoneActionInProgress = false;
+                        if (startupOnly)
+                        {
+                            PostStartupRetryCompletionCheck();
+                        }
                     }
                 });
             }
+        }
+
+        private void PostStartupRetryCompletionCheck()
+        {
+            SendOrPostCallback callback = delegate
+            {
+                if (!_startupRetryActive)
+                {
+                    return;
+                }
+
+                if (AllStartupRunOnceZonesTriggered())
+                {
+                    StopStartupRetry("시작 시 1회 실행 대상 위치 처리가 완료되어 부팅 초기 확인을 종료합니다.");
+                }
+                else if (_startupRetryAttemptsRemaining <= 0 && !_scanInProgress && !_zoneActionInProgress)
+                {
+                    StopStartupRetry("활성 위치를 찾지 못해 부팅 초기 확인을 종료합니다.");
+                }
+            };
+
+            if (_uiContext != null)
+            {
+                _uiContext.Post(callback, null);
+                return;
+            }
+
+            callback(null);
         }
 
         private void QueueFollowUpScan(string reason)

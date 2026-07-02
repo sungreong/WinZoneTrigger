@@ -129,8 +129,37 @@ namespace WinZoneTrigger
             List<ZoneRule> startupZones = _config.Zones
                 .Where(z => z.Enabled && z.RunOnceAtStartup.GetValueOrDefault(true))
                 .ToList();
-            return startupZones.Count > 0
-                && startupZones.All(z => !string.IsNullOrWhiteSpace(z.Id) && _startupTriggeredZoneIds.Contains(z.Id));
+            lock (_startupTriggeredZoneIds)
+            {
+                return startupZones.Count > 0
+                    && startupZones.All(z => !string.IsNullOrWhiteSpace(z.Id) && _startupTriggeredZoneIds.Contains(z.Id));
+            }
+        }
+
+        private bool IsStartupZoneCompleted(ZoneRule zone)
+        {
+            if (zone == null || string.IsNullOrWhiteSpace(zone.Id))
+            {
+                return false;
+            }
+
+            lock (_startupTriggeredZoneIds)
+            {
+                return _startupTriggeredZoneIds.Contains(zone.Id);
+            }
+        }
+
+        private void MarkStartupZoneCompleted(ZoneRule zone)
+        {
+            if (zone == null || string.IsNullOrWhiteSpace(zone.Id))
+            {
+                return;
+            }
+
+            lock (_startupTriggeredZoneIds)
+            {
+                _startupTriggeredZoneIds.Add(zone.Id);
+            }
         }
     }
 }

@@ -143,6 +143,7 @@ namespace WinZoneTrigger
             }
 
             log("동작 실행 종료: " + zone.Name);
+            executionResult.Completed = true;
             return executionResult;
         }
     }
@@ -154,6 +155,7 @@ namespace WinZoneTrigger
         public bool WifiConnectionRequested { get; set; }
         public bool WifiConnectionVerified { get; set; }
         public string ConnectedSsid { get; set; }
+        public bool Completed { get; set; }
     }
 
     internal static class WifiActions
