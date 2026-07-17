@@ -39,24 +39,25 @@ namespace WinZoneTrigger
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             Controls.Add(root);
 
-            FlowLayoutPanel topBar = new FlowLayoutPanel();
-            topBar.Dock = DockStyle.Top;
-            topBar.AutoSize = false;
-            topBar.Height = 64;
-            topBar.BackColor = UiSurfaceMuted;
-            topBar.Padding = new Padding(12, 8, 12, 8);
-            topBar.WrapContents = false;
-            topBar.Margin = new Padding(0, 0, 0, 8);
-            root.Controls.Add(topBar, 0, 0);
+            _topBar = new FlowLayoutPanel();
+            _topBar.Dock = DockStyle.Top;
+            _topBar.AutoSize = true;
+            _topBar.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            _topBar.MinimumSize = new Size(0, 64);
+            _topBar.BackColor = UiSurfaceMuted;
+            _topBar.Padding = new Padding(UiMetrics.SpaceMd, UiMetrics.SpaceSm, UiMetrics.SpaceMd, UiMetrics.SpaceSm);
+            _topBar.WrapContents = true;
+            _topBar.Margin = new Padding(0, 0, 0, UiMetrics.SpaceSm);
+            root.Controls.Add(_topBar, 0, 0);
 
-            Label appTitle = new Label();
-            appTitle.Text = "위치 자동 실행";
-            appTitle.AutoSize = true;
-            appTitle.Font = new Font(Font.FontFamily, 12.25F, FontStyle.Bold, GraphicsUnit.Point);
-            appTitle.ForeColor = UiAccentDark;
-            appTitle.Margin = new Padding(2, 5, 18, 4);
-            appTitle.Tag = "AccentTitle";
-            topBar.Controls.Add(appTitle);
+            _appTitleLabel = new Label();
+            _appTitleLabel.Text = "위치 자동 실행";
+            _appTitleLabel.AutoSize = true;
+            _appTitleLabel.Font = new Font(Font.FontFamily, 12.25F, FontStyle.Bold, GraphicsUnit.Point);
+            _appTitleLabel.ForeColor = UiAccentDark;
+            _appTitleLabel.Margin = new Padding(2, 5, 18, 4);
+            _appTitleLabel.Tag = "AccentTitle";
+            _topBar.Controls.Add(_appTitleLabel);
 
             _startupCheck = new CheckBox();
             _startupCheck.Visible = false;
@@ -66,16 +67,16 @@ namespace WinZoneTrigger
 
             Button settingsButton = CreateButton("설정");
             settingsButton.Click += delegate { OpenSettingsDialog(); };
-            topBar.Controls.Add(settingsButton);
+            _topBar.Controls.Add(settingsButton);
 
             _zonePickerButton = CreateButton("위치 선택");
             _zonePickerButton.Visible = false;
             _zonePickerButton.Click += delegate { ShowCompactZonePicker(); };
-            topBar.Controls.Add(_zonePickerButton);
+            _topBar.Controls.Add(_zonePickerButton);
 
             _pauseAutomationButton = CreateButton("임시 정지");
             _pauseAutomationButton.Click += delegate { ShowAutomationPauseMenu(); };
-            topBar.Controls.Add(_pauseAutomationButton);
+            _topBar.Controls.Add(_pauseAutomationButton);
 
             _contentGrid = new TableLayoutPanel();
             _contentGrid.Dock = DockStyle.Fill;
@@ -149,14 +150,7 @@ namespace WinZoneTrigger
 
             Button addZoneButton = CreateButton("새 위치");
             DockSidebarButton(addZoneButton);
-            addZoneButton.Click += delegate
-            {
-                CaptureCurrentZone();
-                ZoneRule zone = ZoneRule.CreateDefault("새 위치");
-                _config.Zones.Add(zone);
-                BindZoneList(zone.Id);
-                AppendLog("위치가 추가되었습니다: " + zone.Name);
-            };
+            addZoneButton.Click += delegate { CreateNewZone(); };
             zoneButtons.Controls.Add(addZoneButton, 0, 0);
 
             Button currentZoneButton = CreateButton("현재 위치 등록");
@@ -236,7 +230,7 @@ namespace WinZoneTrigger
             zoneSchedulePanel.Controls.Add(_monitoringCheck);
 
             zoneSchedulePanel.Controls.Add(CreateInlineLabel("조건 확인 주기(초)"));
-            _intervalInput = new NumericUpDown();
+            _intervalInput = UiMetrics.CreateNumericUpDown();
             _intervalInput.Minimum = 5;
             _intervalInput.Maximum = 3600;
             _intervalInput.Width = 72;
@@ -247,10 +241,9 @@ namespace WinZoneTrigger
             AddRowTo(_actionTable, "실행 시점", zoneSchedulePanel);
 
             Label scheduleHintLabel = CreateStatusValueLabel("시작 후 조건이 처음 맞으면 한 번 실행합니다. 조건이 계속 맞는 동안 같은 동작을 매번 반복 실행하지 않습니다.");
-            scheduleHintLabel.MaximumSize = new Size(840, 0);
             AddRowTo(_actionTable, "", scheduleHintLabel);
 
-            _zoneNameText = new TextBox();
+            _zoneNameText = UiMetrics.CreateTextBox();
             _zoneNameText.Dock = DockStyle.Fill;
             _zoneNameText.TextChanged += delegate { UpdateSelectedZoneSummary(); };
             AddRowTo(_conditionTable, "위치 이름", _zoneNameText);
@@ -267,17 +260,17 @@ namespace WinZoneTrigger
             _coordinatesPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
 
             _latitudeCoordinateLabel = CreateCoordinateLabel("위도");
-            _latitudeText = new TextBox();
+            _latitudeText = UiMetrics.CreateTextBox();
             _latitudeText.Dock = DockStyle.Fill;
             _latitudeText.Margin = new Padding(0, 3, 8, 3);
 
             _longitudeCoordinateLabel = CreateCoordinateLabel("경도");
-            _longitudeText = new TextBox();
+            _longitudeText = UiMetrics.CreateTextBox();
             _longitudeText.Dock = DockStyle.Fill;
             _longitudeText.Margin = new Padding(0, 3, 8, 3);
 
             _radiusCoordinateLabel = CreateCoordinateLabel("반경(m)");
-            _radiusInput = new NumericUpDown();
+            _radiusInput = UiMetrics.CreateNumericUpDown();
             _radiusInput.Minimum = 10;
             _radiusInput.Maximum = 100000;
             _radiusInput.Value = 200;
@@ -317,7 +310,6 @@ namespace WinZoneTrigger
             _selectedWifiLabel = new Label();
             _selectedWifiLabel.Dock = DockStyle.Fill;
             _selectedWifiLabel.AutoSize = true;
-            _selectedWifiLabel.MaximumSize = new Size(760, 0);
             _selectedWifiLabel.Text = "선택된 Wi-Fi 없음";
             AddRowTo(_conditionTable, "선택됨", _selectedWifiLabel);
 
@@ -365,16 +357,15 @@ namespace WinZoneTrigger
             _connectWifiTargetLabel = new Label();
             _connectWifiTargetLabel.Dock = DockStyle.Fill;
             _connectWifiTargetLabel.AutoSize = true;
-            _connectWifiTargetLabel.MaximumSize = new Size(760, 0);
             _connectWifiTargetLabel.Text = "연결 대상 없음";
             AddRowTo(_actionTable, "연결 선택됨", _connectWifiTargetLabel);
 
-            _connectProfileText = new TextBox();
+            _connectProfileText = UiMetrics.CreateTextBox();
             _connectProfileText.Dock = DockStyle.Fill;
             _connectProfileText.TextChanged += delegate { UpdateConnectWifiTargetLabel(); };
             AddRowTo(_actionTable, "프로필 이름", _connectProfileText);
 
-            _connectSsidText = new TextBox();
+            _connectSsidText = UiMetrics.CreateTextBox();
             _connectSsidText.Dock = DockStyle.Fill;
             _connectSsidText.TextChanged += delegate { UpdateConnectWifiTargetLabel(); };
             AddRowTo(_actionTable, "연결 SSID", _connectSsidText);
@@ -386,7 +377,7 @@ namespace WinZoneTrigger
             connectButtons.Controls.Add(testWifiConnectButton);
             AddRowTo(_actionTable, "", connectButtons);
 
-            _audioActionCombo = new ComboBox();
+            _audioActionCombo = UiMetrics.CreateComboBox();
             _audioActionCombo.DropDownStyle = ComboBoxStyle.DropDownList;
             _audioActionCombo.Items.AddRange(new object[] { "안 함", "음소거", "음소거 해제" });
             AddRowTo(_actionTable, "소리", _audioActionCombo);
@@ -404,9 +395,9 @@ namespace WinZoneTrigger
             FlowLayoutPanel chromeInputPanel = new FlowLayoutPanel();
             chromeInputPanel.Dock = DockStyle.Fill;
             chromeInputPanel.AutoSize = true;
-            chromeInputPanel.WrapContents = false;
+            chromeInputPanel.WrapContents = true;
             chromeInputPanel.Margin = new Padding(0, 0, 0, 6);
-            _chromeUrlInputText = new TextBox();
+            _chromeUrlInputText = UiMetrics.CreateTextBox();
             _chromeUrlInputText.Width = 390;
             _chromeUrlInputText.KeyDown += delegate(object sender, KeyEventArgs e)
             {
@@ -471,7 +462,7 @@ namespace WinZoneTrigger
             appInputPanel.AutoSize = true;
             appInputPanel.WrapContents = true;
             appInputPanel.Margin = new Padding(0, 0, 0, 6);
-            _appLaunchInputText = new TextBox();
+            _appLaunchInputText = UiMetrics.CreateTextBox();
             _appLaunchInputText.Width = 300;
             _appLaunchInputText.TextChanged += delegate { RenderAppSearchResults(_appLaunchInputText.Text); };
             _appLaunchInputText.KeyDown += delegate(object sender, KeyEventArgs e)
@@ -569,7 +560,6 @@ namespace WinZoneTrigger
             AddSectionHeaderTo(_appWatchTable, "조건이 맞는 동안 앱을 유지");
 
             Label appWatchHintLabel = CreateStatusValueLabel("이 위치가 활성일 때만 앱을 확인하고, 꺼져 있으면 다시 실행합니다.");
-            appWatchHintLabel.MaximumSize = new Size(840, 0);
             AddRowTo(_appWatchTable, "", appWatchHintLabel);
 
             TableLayoutPanel appWatchListPanel = new TableLayoutPanel();
@@ -658,7 +648,7 @@ namespace WinZoneTrigger
             appWatchTargetInputPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             appWatchTargetInputPanel.Margin = new Padding(0, 0, 0, 6);
 
-            _appWatchTargetText = new TextBox();
+            _appWatchTargetText = UiMetrics.CreateTextBox();
             _appWatchTargetText.Dock = DockStyle.Fill;
             appWatchTargetInputPanel.Controls.Add(_appWatchTargetText, 0, 0);
 
@@ -686,7 +676,6 @@ namespace WinZoneTrigger
             Label appWatchTargetHint = new Label();
             appWatchTargetHint.Dock = DockStyle.Fill;
             appWatchTargetHint.AutoSize = true;
-            appWatchTargetHint.MaximumSize = new Size(760, 0);
             appWatchTargetHint.Text = "앱 이름, 실행 파일, 바로가기, 앱 프로토콜을 사용할 수 있습니다.";
             appWatchTargetHint.ForeColor = UiTextMuted;
             appWatchTargetHint.Tag = "Muted";
@@ -696,7 +685,7 @@ namespace WinZoneTrigger
             appWatchTargetPanel.Controls.Add(appWatchTargetHint, 0, 1);
             AddRowTo(_appWatchTable, "실행 대상", appWatchTargetPanel);
 
-            _appWatchProcessText = new TextBox();
+            _appWatchProcessText = UiMetrics.CreateTextBox();
             _appWatchProcessText.Dock = DockStyle.Fill;
             AddRowTo(_appWatchTable, "프로세스 이름", _appWatchProcessText);
 
@@ -705,13 +694,13 @@ namespace WinZoneTrigger
             appWatchIntervalPanel.AutoSize = true;
             appWatchIntervalPanel.WrapContents = true;
 
-            _appWatchIntervalInput = new NumericUpDown();
+            _appWatchIntervalInput = UiMetrics.CreateNumericUpDown();
             _appWatchIntervalInput.Minimum = 1;
             _appWatchIntervalInput.Maximum = 10080;
             _appWatchIntervalInput.Width = 78;
             appWatchIntervalPanel.Controls.Add(_appWatchIntervalInput);
 
-            _appWatchIntervalUnitCombo = new ComboBox();
+            _appWatchIntervalUnitCombo = UiMetrics.CreateComboBox();
             _appWatchIntervalUnitCombo.DropDownStyle = ComboBoxStyle.DropDownList;
             _appWatchIntervalUnitCombo.Width = 88;
             _appWatchIntervalUnitCombo.Items.AddRange(new object[] { "분", "시간" });
@@ -721,7 +710,6 @@ namespace WinZoneTrigger
             _appWatchStatusLabel = new Label();
             _appWatchStatusLabel.Dock = DockStyle.Fill;
             _appWatchStatusLabel.AutoSize = true;
-            _appWatchStatusLabel.MaximumSize = new Size(760, 0);
             _appWatchStatusLabel.Text = "아직 확인 전입니다.";
             AddRowTo(_appWatchTable, "최근 확인", _appWatchStatusLabel);
 
@@ -904,6 +892,7 @@ namespace WinZoneTrigger
                 ResetScanTimer();
                 ResetAppWatchTimer();
             };
+
         }
 
     }

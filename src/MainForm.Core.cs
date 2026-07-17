@@ -21,6 +21,7 @@ namespace WinZoneTrigger
         private readonly bool _startMinimizedRequested;
         private readonly bool _startedFromWindowsStartup;
         private readonly bool _automationEnabled;
+        private readonly bool _layoutTestMode;
         private readonly Dictionary<string, bool> _insideZones;
         private readonly Dictionary<string, DateTime> _lastAppWatchChecks;
         private readonly Dictionary<string, string> _lastAppWatchStatusTexts;
@@ -52,6 +53,8 @@ namespace WinZoneTrigger
         private TableLayoutPanel _zoneSidebar;
         private Panel _contentDivider;
         private Panel _detailHost;
+        private FlowLayoutPanel _topBar;
+        private Label _appTitleLabel;
         private Button _zonePickerButton;
         private TabPage _allZonesTab;
         private TabPage _activeZonesTab;
@@ -70,13 +73,9 @@ namespace WinZoneTrigger
         private Label _summaryMatchBadge;
         private Label _summaryModeBadge;
         private Button _saveSummaryButton;
-        private Button _refreshSummaryButton;
         private Button _testConditionSummaryButton;
-        private Button _testActionsSummaryButton;
-        private Button _openConfigSummaryButton;
         private Button _pauseAutomationButton;
         private Button _operateSummaryButton;
-        private Button _stopOperatingSummaryButton;
         private CheckBox _monitoringCheck;
         private CheckBox _runOnceStartupCheck;
         private CheckBox _startupCheck;
@@ -153,15 +152,27 @@ namespace WinZoneTrigger
         }
 
         public MainForm(bool startMinimizedRequested, bool startedFromWindowsStartup, bool automationEnabled)
+            : this(startMinimizedRequested, startedFromWindowsStartup, automationEnabled, null, false)
+        {
+        }
+
+        internal MainForm(AppConfig layoutFixture)
+            : this(false, false, false, layoutFixture, true)
+        {
+        }
+
+        private MainForm(bool startMinimizedRequested, bool startedFromWindowsStartup, bool automationEnabled, AppConfig layoutFixture, bool layoutTestMode)
         {
             _startMinimizedRequested = startMinimizedRequested;
             _startedFromWindowsStartup = startedFromWindowsStartup;
             _automationEnabled = automationEnabled;
+            _layoutTestMode = layoutTestMode;
             _insideZones = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
             _lastAppWatchChecks = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
             _lastAppWatchStatusTexts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             _lastVisibleNetworks = new List<WifiNetwork>();
-            _config = ConfigStore.Load();
+            _config = layoutFixture ?? ConfigStore.Load();
+            _config.Normalize();
             _scanTimer = new System.Windows.Forms.Timer();
             _startupRetryTimer = new System.Windows.Forms.Timer();
             _appWatchTimer = new System.Windows.Forms.Timer();
@@ -171,13 +182,18 @@ namespace WinZoneTrigger
             _appWatchTimer.Tick += AppWatchTimerTick;
             _logRefreshTimer.Interval = 5000;
             _logRefreshTimer.Tick += LogRefreshTimerTick;
-            _powerStateMonitor = new PowerStateMonitor(HandlePowerModeChanged);
+            _powerStateMonitor = _layoutTestMode ? null : new PowerStateMonitor(HandlePowerModeChanged);
 
             InitializeComponent();
             Resize += delegate { ApplyResponsiveLayout(); };
             ApplyResponsiveLayout();
-            ConfigureTray();
             BindConfigToControls();
+            if (_layoutTestMode)
+            {
+                return;
+            }
+
+            ConfigureTray();
             ResetScanTimer();
             ResetAppWatchTimer();
             _logRefreshTimer.Start();

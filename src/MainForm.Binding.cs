@@ -26,15 +26,18 @@ namespace WinZoneTrigger
         private void BindConfigToControls()
         {
             _loadingSelection = true;
-            _startupCheck.Checked = StartupManager.IsEnabled();
+            _startupCheck.Checked = _layoutTestMode ? false : StartupManager.IsEnabled();
             _startMinimizedCheck.Checked = _config.StartMinimized;
             _loadingSelection = false;
 
             string selectedId = _config.Zones.Count > 0 ? _config.Zones[0].Id : null;
             BindZoneList(selectedId);
             UpdateAutomationPauseButton();
-            AppendLog("설정을 불러왔습니다: " + ConfigStore.ConfigPath);
-            AppendLog("자동 시작 상태: " + StartupManager.GetStartupStatusSummary());
+            if (!_layoutTestMode)
+            {
+                AppendLog("설정을 불러왔습니다: " + ConfigStore.ConfigPath);
+                AppendLog("자동 시작 상태: " + StartupManager.GetStartupStatusSummary());
+            }
         }
 
         private void BindZoneList(string selectedId)

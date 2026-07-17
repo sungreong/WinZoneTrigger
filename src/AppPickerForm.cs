@@ -25,12 +25,20 @@ namespace WinZoneTrigger
         private readonly Button _addButton;
         private readonly Button _cancelButton;
         private readonly TableLayoutPanel _searchRow;
+        private readonly List<AppSearchCandidate> _layoutFixtureCandidates;
+        private readonly ToolTip _resultToolTip;
         private List<AppSearchCandidate> _candidates;
 
         public List<string> SelectedTargets { get; private set; }
 
         public AppPickerForm()
+            : this(null)
         {
+        }
+
+        internal AppPickerForm(List<AppSearchCandidate> layoutFixtureCandidates)
+        {
+            _layoutFixtureCandidates = layoutFixtureCandidates;
             SelectedTargets = new List<string>();
             Text = "앱 찾기";
             StartPosition = FormStartPosition.CenterParent;
@@ -65,10 +73,8 @@ namespace WinZoneTrigger
             _searchRow.AutoSize = true;
             _searchRow.Margin = new Padding(0, 0, 0, 8);
 
-            _searchText = new TextBox();
+            _searchText = UiMetrics.CreateTextBox();
             _searchText.Dock = DockStyle.Fill;
-            _searchText.AutoSize = false;
-            _searchText.Height = 30;
             _searchText.Margin = new Padding(0, 0, 8, 0);
             _searchText.TextChanged += delegate { LoadCandidates(_searchText.Text); };
 
@@ -107,6 +113,8 @@ namespace WinZoneTrigger
             _resultList.Margin = new Padding(0, 0, 0, 12);
             _resultList.SelectedIndexChanged += delegate { UpdateAddButton(); };
             _resultList.DoubleClick += delegate { AcceptSelection(); };
+            _resultToolTip = new ToolTip();
+            _resultList.MouseMove += ResultListMouseMove;
             root.Controls.Add(_resultList, 0, 3);
 
             FlowLayoutPanel buttons = new FlowLayoutPanel();
@@ -133,7 +141,7 @@ namespace WinZoneTrigger
             Button button = new Button();
             button.Text = text;
             button.AutoSize = false;
-            button.Size = new Size(Math.Max(80, TextRenderer.MeasureText(text, Font).Width + 34), 30);
+            button.Size = new Size(Math.Max(80, TextRenderer.MeasureText(text, Font).Width + 34), UiMetrics.InputHeight);
             button.Margin = new Padding(6, 0, 0, 0);
             button.Cursor = Cursors.Hand;
             button.FlatStyle = FlatStyle.Standard;
@@ -187,10 +195,15 @@ namespace WinZoneTrigger
         {
             if (refresh)
             {
-                AppLauncher.RefreshInstalledAppIndex();
+                if (_layoutFixtureCandidates == null)
+                {
+                    AppLauncher.RefreshInstalledAppIndex();
+                }
             }
 
-            _candidates = AppLauncher.FindInstalledApps(query, 300, true);
+            _candidates = _layoutFixtureCandidates == null
+                ? AppLauncher.FindInstalledApps(query, 300, true)
+                : FilterFixtureCandidates(query);
             _resultList.Items.Clear();
             foreach (AppSearchCandidate candidate in _candidates)
             {
@@ -207,6 +220,31 @@ namespace WinZoneTrigger
                 ? "검색 가능한 앱 " + _candidates.Count + "개 표시"
                 : "'" + term + "' 검색 결과 " + _candidates.Count + "개";
             UpdateAddButton();
+        }
+
+        private List<AppSearchCandidate> FilterFixtureCandidates(string query)
+        {
+            string term = (query ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(term))
+            {
+                return new List<AppSearchCandidate>(_layoutFixtureCandidates);
+            }
+
+            return _layoutFixtureCandidates
+                .Where(candidate => candidate != null
+                    && ((candidate.Name ?? "").IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0
+                        || (candidate.Source ?? "").IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0
+                        || (candidate.Target ?? "").IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0))
+                .ToList();
+        }
+
+        private void ResultListMouseMove(object sender, MouseEventArgs e)
+        {
+            int index = _resultList.IndexFromPoint(e.Location);
+            AppSearchCandidate candidate = index >= 0 && index < _resultList.Items.Count
+                ? _resultList.Items[index] as AppSearchCandidate
+                : null;
+            _resultToolTip.SetToolTip(_resultList, candidate == null ? "" : BuildCandidateTargetText(candidate));
         }
 
         private static string BuildCandidateTargetText(AppSearchCandidate candidate)
@@ -236,7 +274,7 @@ namespace WinZoneTrigger
             int count = _resultList.SelectedItems.Count;
             _addButton.Enabled = count > 0;
             _addButton.Text = count <= 1 ? "선택한 앱 등록" : "선택한 앱 " + count + "개 등록";
-            _addButton.Size = new Size(Math.Max(112, TextRenderer.MeasureText(_addButton.Text, Font).Width + 34), 30);
+            _addButton.Size = new Size(Math.Max(112, TextRenderer.MeasureText(_addButton.Text, Font).Width + 34), UiMetrics.InputHeight);
         }
 
         private void AcceptSelection()

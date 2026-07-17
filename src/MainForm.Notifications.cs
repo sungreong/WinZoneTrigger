@@ -240,12 +240,12 @@ namespace WinZoneTrigger
             label.AutoSize = true;
             label.Font = new Font(Font.FontFamily, 8.75F, FontStyle.Bold, GraphicsUnit.Point);
             label.ForeColor = UiTextMuted;
-            label.Margin = new Padding(0, 7, 10, 5);
+            label.Margin = new Padding(0, UiMetrics.SpaceSm - 1, UiMetrics.SpaceMd, UiMetrics.SpaceXs + 1);
             label.TextAlign = ContentAlignment.TopLeft;
             label.Tag = "Muted";
             table.Controls.Add(label, 0, row);
 
-            control.Margin = new Padding(0, 3, 0, 5);
+            control.Margin = new Padding(0, UiMetrics.SpaceXs - 1, 0, UiMetrics.SpaceXs + 1);
             table.Controls.Add(control, 1, row);
         }
 
@@ -270,12 +270,12 @@ namespace WinZoneTrigger
             label.Font = new Font(Font.FontFamily, 9.75F, FontStyle.Bold, GraphicsUnit.Point);
             label.ForeColor = UiAccentDark;
             label.AutoSize = false;
-            label.Height = 28;
+            label.Height = UiMetrics.InputHeight;
             label.Dock = DockStyle.Fill;
             label.TextAlign = ContentAlignment.MiddleLeft;
             label.BackColor = UiAccentSoft;
-            label.Margin = new Padding(0, 9, 0, 6);
-            label.Padding = new Padding(10, 0, 0, 0);
+            label.Margin = new Padding(0, UiMetrics.SpaceSm + 1, 0, UiMetrics.SpaceSm - 2);
+            label.Padding = new Padding(UiMetrics.SpaceMd, 0, 0, 0);
             label.Tag = "SectionHeader";
 
             table.Controls.Add(label, 0, row);

@@ -23,6 +23,7 @@ namespace WinZoneTrigger
         private readonly Label _nightLightStatusLabel;
         private readonly CheckBox _trayIconCheck;
         private readonly System.Windows.Forms.Timer _backgroundStatusTimer;
+        private readonly bool _layoutTestMode;
         private Label _backgroundHealthValue;
         private Label _backgroundProcessValue;
         private Label _backgroundUpdatedValue;
@@ -76,7 +77,22 @@ namespace WinZoneTrigger
             int defaultBrightnessPercent,
             List<BrightnessPeriod> brightnessPeriods,
             bool trayIconEnabled)
+            : this(startupEnabled, startMinimized, preventSleepWhileAutomationActive, brightnessScheduleEnabled,
+                defaultBrightnessPercent, brightnessPeriods, trayIconEnabled, false)
         {
+        }
+
+        internal SettingsForm(
+            bool startupEnabled,
+            bool startMinimized,
+            bool preventSleepWhileAutomationActive,
+            bool brightnessScheduleEnabled,
+            int defaultBrightnessPercent,
+            List<BrightnessPeriod> brightnessPeriods,
+            bool trayIconEnabled,
+            bool layoutTestMode)
+        {
+            _layoutTestMode = layoutTestMode;
             Text = "설정";
             StartPosition = FormStartPosition.CenterParent;
             Rectangle workingArea = Screen.FromPoint(Cursor.Position).WorkingArea;
@@ -185,7 +201,7 @@ namespace WinZoneTrigger
             defaultBrightnessLabel.AutoSize = true;
             defaultBrightnessLabel.Margin = new Padding(0, 5, 8, 0);
             defaultBrightnessRow.Controls.Add(defaultBrightnessLabel, 0, 0);
-            _defaultBrightnessInput = new NumericUpDown();
+            _defaultBrightnessInput = UiMetrics.CreateNumericUpDown();
             _defaultBrightnessInput.Minimum = 1;
             _defaultBrightnessInput.Maximum = 100;
             _defaultBrightnessInput.Value = Math.Max(1, Math.Min(100, defaultBrightnessPercent <= 0 ? 70 : defaultBrightnessPercent));
@@ -233,7 +249,7 @@ namespace WinZoneTrigger
             verifyLabel.AutoSize = true;
             verifyLabel.Margin = new Padding(0, 6, 8, 0);
             verifyRow.Controls.Add(verifyLabel, 0, 0);
-            _brightnessVerifyTimeText = new TextBox();
+            _brightnessVerifyTimeText = UiMetrics.CreateTextBox();
             _brightnessVerifyTimeText.Text = DateTime.Now.ToString("HH:mm");
             _brightnessVerifyTimeText.Width = 70;
             _brightnessVerifyTimeText.Margin = new Padding(0, 2, 6, 0);
@@ -323,10 +339,13 @@ namespace WinZoneTrigger
             CancelButton = cancelButton;
 
             _backgroundStatusTimer = new System.Windows.Forms.Timer();
-            _backgroundStatusTimer.Interval = 5000;
-            _backgroundStatusTimer.Tick += delegate { RefreshBackgroundStatus(); };
-            _backgroundStatusTimer.Start();
-            RefreshBackgroundStatus();
+            if (!_layoutTestMode)
+            {
+                _backgroundStatusTimer.Interval = 5000;
+                _backgroundStatusTimer.Tick += delegate { RefreshBackgroundStatus(); };
+                _backgroundStatusTimer.Start();
+                RefreshBackgroundStatus();
+            }
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e)

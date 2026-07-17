@@ -1,5 +1,6 @@
 .agents/
 dist/ui-check.png
+bin/layout-preview/
 *.tmp
 *.log
 *.user

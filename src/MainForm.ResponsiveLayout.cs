@@ -6,7 +6,8 @@ namespace WinZoneTrigger
 {
     internal sealed partial class MainForm : Form
     {
-        private const int CompactLayoutWidth = 1000;
+        private const int DesktopLayoutWidth = 1120;
+        private const int MinimumDesktopDetailWidth = 680;
 
         private void ApplyResponsiveLayout()
         {
@@ -17,40 +18,32 @@ namespace WinZoneTrigger
 
             // The location list is navigation, not form content.  On smaller
             // windows it becomes a picker so the active form keeps the full width.
-            bool compact = ClientSize.Width < CompactLayoutWidth;
+            bool compact = ClientSize.Width < DesktopLayoutWidth;
             _contentGrid.SuspendLayout();
             _contentGrid.ColumnStyles.Clear();
             _contentGrid.RowStyles.Clear();
 
-            if (compact)
+            ApplyContentGridMode(compact);
+            _contentGrid.ResumeLayout(true);
+
+            if (!compact && _detailHost.ClientSize.Width < MinimumDesktopDetailWidth)
             {
-                _contentGrid.ColumnCount = 1;
-                _contentGrid.RowCount = 1;
-                _contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-                _contentGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-                _zoneSidebar.Visible = false;
-                _contentDivider.Visible = false;
-                _contentGrid.SetCellPosition(_detailHost, new TableLayoutPanelCellPosition(0, 0));
-            }
-            else
-            {
-                int sidebarWidth = ClientSize.Width < 1240 ? 320 : 332;
-                _contentGrid.ColumnCount = 3;
-                _contentGrid.RowCount = 1;
-                _contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, sidebarWidth));
-                _contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 1));
-                _contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-                _contentGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-                _zoneSidebar.Visible = true;
-                _contentDivider.Visible = true;
-                _contentGrid.SetCellPosition(_zoneSidebar, new TableLayoutPanelCellPosition(0, 0));
-                _contentGrid.SetCellPosition(_contentDivider, new TableLayoutPanelCellPosition(1, 0));
-                _contentGrid.SetCellPosition(_detailHost, new TableLayoutPanelCellPosition(2, 0));
+                compact = true;
+                _contentGrid.SuspendLayout();
+                _contentGrid.ColumnStyles.Clear();
+                _contentGrid.RowStyles.Clear();
+                ApplyContentGridMode(true);
+                _contentGrid.ResumeLayout(true);
             }
 
             if (_zonePickerButton != null)
             {
                 _zonePickerButton.Visible = compact;
+            }
+
+            if (_topBar != null && _appTitleLabel != null)
+            {
+                _topBar.SetFlowBreak(_appTitleLabel, compact);
             }
 
             if (_detailTabs != null)
@@ -65,12 +58,39 @@ namespace WinZoneTrigger
             }
 
             _contentGrid.ResumeLayout(true);
-            SetDetailTableLabelWidth(_conditionTable, compact ? 96 : 118);
-            SetDetailTableLabelWidth(_actionTable, compact ? 96 : 118);
-            SetDetailTableLabelWidth(_appWatchTable, compact ? 96 : 118);
-            SetDetailTableLabelWidth(_statusTable, compact ? 96 : 118);
+            SetDetailTableLabelWidth(_conditionTable, compact ? UiMetrics.CompactLabelColumnWidth : UiMetrics.DesktopLabelColumnWidth);
+            SetDetailTableLabelWidth(_actionTable, compact ? UiMetrics.CompactLabelColumnWidth : UiMetrics.DesktopLabelColumnWidth);
+            SetDetailTableLabelWidth(_appWatchTable, compact ? UiMetrics.CompactLabelColumnWidth : UiMetrics.DesktopLabelColumnWidth);
+            SetDetailTableLabelWidth(_statusTable, compact ? UiMetrics.CompactLabelColumnWidth : UiMetrics.DesktopLabelColumnWidth);
             ConfigureCoordinateLayout(ShouldUseCompactCoordinateLayout(compact));
             ResizeAppWatchItemRows();
+        }
+
+        private void ApplyContentGridMode(bool compact)
+        {
+            if (compact)
+            {
+                _contentGrid.ColumnCount = 1;
+                _contentGrid.RowCount = 1;
+                _contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                _contentGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+                _zoneSidebar.Visible = false;
+                _contentDivider.Visible = false;
+                _contentGrid.SetCellPosition(_detailHost, new TableLayoutPanelCellPosition(0, 0));
+                return;
+            }
+
+            _contentGrid.ColumnCount = 3;
+            _contentGrid.RowCount = 1;
+            _contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 320));
+            _contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 1));
+            _contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            _contentGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            _zoneSidebar.Visible = true;
+            _contentDivider.Visible = true;
+            _contentGrid.SetCellPosition(_zoneSidebar, new TableLayoutPanelCellPosition(0, 0));
+            _contentGrid.SetCellPosition(_contentDivider, new TableLayoutPanelCellPosition(1, 0));
+            _contentGrid.SetCellPosition(_detailHost, new TableLayoutPanelCellPosition(2, 0));
         }
 
         private bool ShouldUseCompactCoordinateLayout(bool compactWindow)
@@ -81,7 +101,7 @@ namespace WinZoneTrigger
             }
 
             int labelColumnWidth = _conditionTable.ColumnStyles.Count == 0
-                ? 118
+                ? UiMetrics.DesktopLabelColumnWidth
                 : Convert.ToInt32(_conditionTable.ColumnStyles[0].Width);
             int inputWidth = _conditionTable.ClientSize.Width - _conditionTable.Padding.Horizontal - labelColumnWidth;
             return inputWidth < 620;
@@ -171,6 +191,12 @@ namespace WinZoneTrigger
                 menu.Items.Add(item);
             }
 
+            menu.Items.Add(new ToolStripSeparator());
+            AddCompactZoneAction(menu, "새 위치", CreateNewZone);
+            AddCompactZoneAction(menu, "현재 위치 등록", CreateZoneFromCurrentLocation);
+            AddCompactZoneAction(menu, "복제", DuplicateSelectedZone);
+            AddCompactZoneAction(menu, "삭제", RemoveSelectedZone);
+
             if (menu.Items.Count == 0)
             {
                 ToolStripMenuItem empty = new ToolStripMenuItem("등록된 위치가 없습니다");
@@ -179,6 +205,22 @@ namespace WinZoneTrigger
             }
 
             menu.Show(_zonePickerButton, new Point(0, _zonePickerButton.Height));
+        }
+
+        private void AddCompactZoneAction(ContextMenuStrip menu, string text, Action action)
+        {
+            ToolStripMenuItem item = new ToolStripMenuItem(text);
+            item.Click += delegate { action(); };
+            menu.Items.Add(item);
+        }
+
+        private void CreateNewZone()
+        {
+            CaptureCurrentZone();
+            ZoneRule zone = ZoneRule.CreateDefault("새 위치");
+            _config.Zones.Add(zone);
+            BindZoneList(zone.Id);
+            AppendLog("위치가 추가되었습니다: " + zone.Name);
         }
 
         private void SetDetailTableLabelWidth(TableLayoutPanel table, int width)

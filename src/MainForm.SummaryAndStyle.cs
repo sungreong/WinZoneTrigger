@@ -25,7 +25,7 @@ namespace WinZoneTrigger
             int metaRowHeight = GetTextRowHeight(Font, 8, 28);
             int badgeRowHeight = GetTextRowHeight(Font, 10, 30);
             int textStackHeight = titleRowHeight + metaRowHeight + badgeRowHeight;
-            int toolbarRowHeight = 44;
+            int toolbarRowHeight = UiMetrics.InputHeight + UiMetrics.SpaceSm;
             int summaryHeight = 16 + textStackHeight + toolbarRowHeight;
 
             TableLayoutPanel summary = new TableLayoutPanel();
@@ -35,8 +35,8 @@ namespace WinZoneTrigger
             summary.MinimumSize = new Size(0, summaryHeight);
             summary.MaximumSize = new Size(0, summaryHeight);
             summary.BackColor = UiSurfaceMuted;
-            summary.Padding = new Padding(12, 8, 12, 8);
-            summary.Margin = new Padding(0, 0, 0, 8);
+            summary.Padding = new Padding(UiMetrics.SpaceMd, UiMetrics.SpaceSm, UiMetrics.SpaceMd, UiMetrics.SpaceSm);
+            summary.Margin = new Padding(0, 0, 0, UiMetrics.SpaceSm);
             summary.ColumnCount = 1;
             summary.RowCount = 2;
             summary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -91,53 +91,29 @@ namespace WinZoneTrigger
             FlowLayoutPanel buttons = new FlowLayoutPanel();
             buttons.Dock = DockStyle.Fill;
             buttons.AutoSize = false;
-            buttons.Height = toolbarRowHeight - 4;
+            buttons.Height = UiMetrics.InputHeight;
             buttons.WrapContents = false;
             buttons.FlowDirection = FlowDirection.LeftToRight;
             buttons.Margin = new Padding(0, 8, 0, 0);
             buttons.Padding = new Padding(0);
             buttons.BackColor = UiSurfaceMuted;
 
-            _saveSummaryButton = CreateSummaryIconButton("\uE74E", "저장");
+            _saveSummaryButton = CreateButton("저장");
             _saveSummaryButton.Click += delegate { SaveFromUi(); };
 
-            _refreshSummaryButton = CreateSummaryIconButton("\uE72C", "화면 갱신");
-            _refreshSummaryButton.Click += delegate { RefreshStatusAndLogsNow(); };
-
-            _testConditionSummaryButton = CreateSummaryIconButton("\uE9D9", "조건 테스트");
+            _testConditionSummaryButton = CreateButton("조건 테스트");
             _testConditionSummaryButton.Click += delegate { TestSelectedZoneCondition(); };
 
-            _testActionsSummaryButton = CreateSummaryIconButton("\uE768", "동작 테스트");
-            _testActionsSummaryButton.Click += delegate { TestSelectedZoneActions(); };
+            _operateSummaryButton = CreateButton("운영하기");
+            _operateSummaryButton.Click += ToggleSelectedZoneOperating;
 
-            _openConfigSummaryButton = CreateSummaryIconButton("\uE8B7", "설정 폴더");
-            _openConfigSummaryButton.Click += delegate { OpenConfigFolder(); };
+            Button moreButton = CreateButton("더보기");
+            moreButton.Click += delegate { ShowSummaryMoreMenu(moreButton); };
 
-            _operateSummaryButton = CreateSummaryIconButton("\uE73E", "운영하기");
-            _operateSummaryButton.Click += delegate { SetSelectedZoneOperating(true); };
-
-            _stopOperatingSummaryButton = CreateSummaryIconButton("\uE71A", "운영 중지");
-            _stopOperatingSummaryButton.Click += delegate { ConfirmStopSelectedZoneOperating(); };
-
-            FlowLayoutPanel saveGroup = CreateSummaryButtonGroup();
-            saveGroup.Controls.Add(_saveSummaryButton);
-            saveGroup.Controls.Add(_refreshSummaryButton);
-            buttons.Controls.Add(saveGroup);
-
-            FlowLayoutPanel testGroup = CreateSummaryButtonGroup();
-            testGroup.Controls.Add(_testConditionSummaryButton);
-            testGroup.Controls.Add(_testActionsSummaryButton);
-            buttons.Controls.Add(testGroup);
-
-            FlowLayoutPanel configGroup = CreateSummaryButtonGroup();
-            configGroup.Controls.Add(_openConfigSummaryButton);
-            buttons.Controls.Add(configGroup);
-
-            FlowLayoutPanel operatingGroup = CreateSummaryButtonGroup();
-            operatingGroup.Margin = new Padding(8, 0, 0, 0);
-            operatingGroup.Controls.Add(_operateSummaryButton);
-            operatingGroup.Controls.Add(_stopOperatingSummaryButton);
-            buttons.Controls.Add(operatingGroup);
+            buttons.Controls.Add(_saveSummaryButton);
+            buttons.Controls.Add(_testConditionSummaryButton);
+            buttons.Controls.Add(_operateSummaryButton);
+            buttons.Controls.Add(moreButton);
 
             summary.Controls.Add(textStack, 0, 0);
             summary.Controls.Add(buttons, 0, 1);
@@ -150,37 +126,32 @@ namespace WinZoneTrigger
             return Math.Max(minimum, measured.Height + extraPixels);
         }
 
-        private FlowLayoutPanel CreateSummaryButtonGroup()
+        private void ToggleSelectedZoneOperating(object sender, EventArgs e)
         {
-            FlowLayoutPanel group = new FlowLayoutPanel();
-            group.AutoSize = true;
-            group.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            group.WrapContents = false;
-            group.FlowDirection = FlowDirection.LeftToRight;
-            group.Margin = new Padding(0, 0, 8, 0);
-            group.Padding = new Padding(0);
-            group.BackColor = UiSurfaceMuted;
-            return group;
+            ZoneRule selected = GetSelectedZone();
+            if (selected != null && selected.Enabled)
+            {
+                ConfirmStopSelectedZoneOperating();
+                return;
+            }
+
+            SetSelectedZoneOperating(true);
         }
 
-        private Button CreateSummaryIconButton(string glyph, string tooltip)
+        private void ShowSummaryMoreMenu(Button anchor)
         {
-            Button button = new Button();
-            button.Text = glyph;
-            button.Font = new Font("Segoe MDL2 Assets", 10.5F, FontStyle.Regular, GraphicsUnit.Point);
-            button.TextAlign = ContentAlignment.MiddleCenter;
-            button.Width = 36;
-            button.Height = 34;
-            button.Margin = new Padding(0, 0, 4, 4);
-            button.Padding = new Padding(0);
-            button.FlatStyle = FlatStyle.Standard;
-            button.UseVisualStyleBackColor = true;
-            button.Cursor = Cursors.Hand;
-            button.ForeColor = UiText;
-            button.AccessibleName = tooltip;
-            button.AccessibleDescription = tooltip;
-            EnsureToolTip().SetToolTip(button, tooltip);
-            return button;
+            ContextMenuStrip menu = new ContextMenuStrip();
+            ToolStripMenuItem refresh = new ToolStripMenuItem("화면 갱신");
+            refresh.Click += delegate { RefreshStatusAndLogsNow(); };
+            menu.Items.Add(refresh);
+            ToolStripMenuItem actions = new ToolStripMenuItem("동작 테스트");
+            actions.Click += delegate { TestSelectedZoneActions(); };
+            menu.Items.Add(actions);
+            ToolStripMenuItem config = new ToolStripMenuItem("설정 폴더 열기");
+            config.Click += delegate { OpenConfigFolder(); };
+            menu.Items.Add(config);
+            menu.Closed += delegate { menu.Dispose(); };
+            menu.Show(anchor, new Point(0, anchor.Height));
         }
 
         private ToolTip EnsureToolTip()
@@ -272,7 +243,6 @@ namespace WinZoneTrigger
                 Label label = control as Label;
                 if (label == null
                     || !label.AutoSize
-                    || label.MaximumSize.Width <= 0
                     || table.GetColumn(label) != 1)
                 {
                     continue;
@@ -360,6 +330,12 @@ namespace WinZoneTrigger
                 SetSummaryBadge(_summaryOperatingBadge, "미선택", UiSurface, UiTextMuted);
                 SetSummaryBadge(_summaryMatchBadge, "대기", UiSurface, UiTextMuted);
                 SetSummaryBadge(_summaryModeBadge, "감지 조건 없음", UiSurface, UiTextMuted);
+                if (_operateSummaryButton != null)
+                {
+                    _operateSummaryButton.Text = "운영하기";
+                    _operateSummaryButton.Enabled = false;
+                    StyleButton(_operateSummaryButton, ButtonTone.Primary);
+                }
                 return;
             }
 
@@ -383,6 +359,12 @@ namespace WinZoneTrigger
                 matched ? UiAccentSoft : UiSurface,
                 matched ? UiAccentDark : UiTextMuted);
             SetSummaryBadge(_summaryModeBadge, BuildZoneModeSummary(zone), UiSurface, UiText);
+            if (_operateSummaryButton != null)
+            {
+                _operateSummaryButton.Text = zone.Enabled ? "운영 중지" : "운영하기";
+                _operateSummaryButton.Enabled = true;
+                StyleButton(_operateSummaryButton, zone.Enabled ? ButtonTone.Danger : ButtonTone.Primary);
+            }
         }
 
         private string BuildZoneModeSummary(ZoneRule zone)
@@ -661,8 +643,8 @@ namespace WinZoneTrigger
             button.Text = text;
             button.AutoSize = true;
             button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            button.MinimumSize = new Size(74, 30);
-            button.Padding = new Padding(10, 2, 10, 2);
+            button.MinimumSize = new Size(74, UiMetrics.InputHeight);
+            button.Padding = new Padding(UiMetrics.SpaceMd, UiMetrics.SpaceXs / 2, UiMetrics.SpaceMd, UiMetrics.SpaceXs / 2);
             button.Margin = new Padding(4);
             button.Cursor = Cursors.Hand;
             StyleButton(button, ResolveButtonTone(text));
@@ -678,7 +660,7 @@ namespace WinZoneTrigger
 
             Size measured = TextRenderer.MeasureText(button.Text ?? "", button.Font ?? Font);
             width = Math.Max(width, measured.Width + 48);
-            height = Math.Max(height, 30);
+            height = Math.Max(height, UiMetrics.InputHeight);
             button.AutoSize = false;
             button.Size = new Size(width, height);
             button.MinimumSize = new Size(width, height);
@@ -693,8 +675,8 @@ namespace WinZoneTrigger
 
             button.Dock = DockStyle.Fill;
             button.AutoSize = false;
-            button.MinimumSize = new Size(0, 36);
-            button.Height = 36;
+            button.MinimumSize = new Size(0, UiMetrics.SidebarActionHeight);
+            button.Height = UiMetrics.SidebarActionHeight;
             button.Margin = new Padding(4, 4, 4, 4);
         }
 
