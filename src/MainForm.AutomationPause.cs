@@ -74,7 +74,7 @@ namespace WinZoneTrigger
 
             if (_config.IsAutomationPaused())
             {
-                _pauseAutomationButton.Text = "정지 해제 (" + FormatPauseRemaining(_config.AutomationPausedUntilUtc.Value) + ")";
+                _pauseAutomationButton.Text = "정지 중 · " + FormatPauseButtonUntil(_config.AutomationPausedUntilUtc.Value);
                 _pauseAutomationButton.BackColor = UiAmberSoft;
                 _pauseAutomationButton.ForeColor = UiText;
                 EnsureToolTip().SetToolTip(_pauseAutomationButton, "클릭하면 자동 실행과 앱 감시를 바로 다시 시작합니다.");
@@ -92,18 +92,9 @@ namespace WinZoneTrigger
             return untilUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
         }
 
-        private static string FormatPauseRemaining(DateTime untilUtc)
+        private static string FormatPauseButtonUntil(DateTime untilUtc)
         {
-            TimeSpan remaining = untilUtc.ToUniversalTime() - DateTime.UtcNow;
-            if (remaining.TotalMinutes < 1)
-            {
-                return "1분 미만";
-            }
-            if (remaining.TotalHours < 1)
-            {
-                return Math.Ceiling(remaining.TotalMinutes) + "분";
-            }
-            return Math.Ceiling(remaining.TotalHours) + "시간";
+            return untilUtc.ToLocalTime().ToString("MM/dd HH:mm") + "까지";
         }
     }
 }
