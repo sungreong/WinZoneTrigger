@@ -32,6 +32,7 @@ namespace WinZoneTrigger
 
             string selectedId = _config.Zones.Count > 0 ? _config.Zones[0].Id : null;
             BindZoneList(selectedId);
+            UpdateAutomationPauseButton();
             AppendLog("설정을 불러왔습니다: " + ConfigStore.ConfigPath);
             AppendLog("자동 시작 상태: " + StartupManager.GetStartupStatusSummary());
         }

@@ -68,6 +68,10 @@ namespace WinZoneTrigger
             settingsButton.Click += delegate { OpenSettingsDialog(); };
             topBar.Controls.Add(settingsButton);
 
+            _pauseAutomationButton = CreateButton("임시 정지");
+            _pauseAutomationButton.Click += delegate { ShowAutomationPauseMenu(); };
+            topBar.Controls.Add(_pauseAutomationButton);
+
             TableLayoutPanel contentGrid = new TableLayoutPanel();
             contentGrid.Dock = DockStyle.Fill;
             contentGrid.BackColor = UiBackground;

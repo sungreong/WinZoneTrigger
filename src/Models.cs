@@ -31,6 +31,7 @@ namespace WinZoneTrigger
         public int AppWatchIntervalValue { get; set; }
         public string AppWatchIntervalUnit { get; set; }
         public bool BrightnessScheduleEnabled { get; set; }
+        public DateTime? AutomationPausedUntilUtc { get; set; }
         public int DefaultBrightnessPercent { get; set; }
         public List<BrightnessPeriod> BrightnessPeriods { get; set; }
         public List<ZoneRule> Zones { get; set; }
@@ -52,6 +53,7 @@ namespace WinZoneTrigger
                 AppWatchIntervalValue = 5,
                 AppWatchIntervalUnit = "Minutes",
                 BrightnessScheduleEnabled = false,
+                AutomationPausedUntilUtc = null,
                 DefaultBrightnessPercent = 70,
                 BrightnessPeriods = new List<BrightnessPeriod>(),
                 Zones = new List<ZoneRule>
@@ -166,6 +168,12 @@ namespace WinZoneTrigger
                 firstZone.Normalize();
             }
         }
+
+        public bool IsAutomationPaused()
+        {
+            return AutomationPausedUntilUtc.HasValue
+                && AutomationPausedUntilUtc.Value.ToUniversalTime() > DateTime.UtcNow;
+        }
     }
 
     public sealed class BrightnessPeriod
@@ -187,7 +195,6 @@ namespace WinZoneTrigger
                 NightLightAction = "Keep"
             };
         }
-
         public BrightnessPeriod Clone()
         {
             return new BrightnessPeriod
@@ -231,6 +238,7 @@ namespace WinZoneTrigger
                 NightLightAction = "Keep";
             }
         }
+
     }
 
     public sealed class AppWatchItem

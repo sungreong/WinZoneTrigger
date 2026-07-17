@@ -12,6 +12,7 @@ namespace WinZoneTrigger
         {
             RefreshLogDisplayFromFile();
             RefreshAutomationStateFromFile(false);
+            UpdateAutomationPauseButton();
         }
 
         private void RefreshStatusAndLogsNow()

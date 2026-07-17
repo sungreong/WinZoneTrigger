@@ -26,6 +26,7 @@ namespace WinZoneTrigger
         private readonly System.Windows.Forms.Timer _appWatchTimer;
         private readonly System.Windows.Forms.Timer _startupRetryTimer;
         private readonly System.Windows.Forms.Timer _brightnessTimer;
+        private readonly System.Windows.Forms.Timer _configRefreshTimer;
         private readonly PowerStateMonitor _powerStateMonitor;
         private readonly BrightnessScheduleRunner _brightnessScheduleRunner;
         private readonly SynchronizationContext _uiContext;
@@ -53,6 +54,7 @@ namespace WinZoneTrigger
         private string _stateLastAppWatchItemId = "";
         private string _stateLastAppWatchItemText = "";
         private volatile bool _powerResumeDetected;
+        private bool _automationWasPaused;
 
         public BackgroundAutomationContext()
         {
@@ -62,12 +64,16 @@ namespace WinZoneTrigger
             _appWatchTimer = new System.Windows.Forms.Timer();
             _startupRetryTimer = new System.Windows.Forms.Timer();
             _brightnessTimer = new System.Windows.Forms.Timer();
+            _configRefreshTimer = new System.Windows.Forms.Timer();
             _scanTimer.Tick += ScanTimerTick;
             _appWatchTimer.Tick += AppWatchTimerTick;
             _startupRetryTimer.Interval = 30000;
             _startupRetryTimer.Tick += StartupRetryTimerTick;
             _brightnessTimer.Interval = 60000;
             _brightnessTimer.Tick += BrightnessTimerTick;
+            _configRefreshTimer.Interval = 5000;
+            _configRefreshTimer.Tick += ConfigRefreshTimerTick;
+            _configRefreshTimer.Start();
             _brightnessScheduleRunner = new BrightnessScheduleRunner();
             _powerStateMonitor = new PowerStateMonitor(HandlePowerModeChanged);
 
@@ -87,10 +93,12 @@ namespace WinZoneTrigger
                 _appWatchTimer.Stop();
                 _startupRetryTimer.Stop();
                 _brightnessTimer.Stop();
+                _configRefreshTimer.Stop();
                 _scanTimer.Dispose();
                 _appWatchTimer.Dispose();
                 _startupRetryTimer.Dispose();
                 _brightnessTimer.Dispose();
+                _configRefreshTimer.Dispose();
                 _powerStateMonitor.Dispose();
             }
 
@@ -99,6 +107,31 @@ namespace WinZoneTrigger
 
         private void ResetTimers()
         {
+            if (_config != null && _config.IsAutomationPaused())
+            {
+                _scanTimer.Stop();
+                _appWatchTimer.Stop();
+                _startupRetryTimer.Stop();
+                _brightnessTimer.Stop();
+                _startupRetryActive = false;
+                if (!_automationWasPaused)
+                {
+                    string until = _config.AutomationPausedUntilUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+                    DiagnosticsLog.WriteEvent("자동화 임시 정지 시작: " + until + "까지");
+                    UpdateAutomationEvent("자동화 임시 정지 중: " + until + "까지", "임시 정지", "임시 정지");
+                }
+                _automationWasPaused = true;
+                ApplyPowerSettings();
+                return;
+            }
+
+            if (_automationWasPaused)
+            {
+                _automationWasPaused = false;
+                DiagnosticsLog.WriteEvent("자동화 임시 정지 종료");
+                UpdateAutomationEvent("자동화 임시 정지 종료", "자동 실행 재개", "앱 감시 재개");
+            }
+
             _scanTimer.Stop();
             _scanTimer.Interval = Math.Max(5, GetShortestConditionScanIntervalSeconds()) * 1000;
             if (HasZoneConditionScanZones())
@@ -122,6 +155,26 @@ namespace WinZoneTrigger
             ApplyPowerSettings();
         }
 
+        private void ConfigRefreshTimerTick(object sender, EventArgs e)
+        {
+            bool wasPaused = _automationWasPaused;
+            ReloadConfigIfChanged();
+            if (!wasPaused || _config == null || _config.IsAutomationPaused())
+            {
+                return;
+            }
+
+            if (_automationWasPaused)
+            {
+                ResetTimers();
+            }
+            ApplyBrightnessSchedule("자동화 임시 정지 해제 화면 밝기 일정");
+            if (HasZoneConditionScanZones())
+            {
+                StartScan(false, false);
+            }
+        }
+
         private void BrightnessTimerTick(object sender, EventArgs e)
         {
             if (ReloadConfigIfChanged())
@@ -135,11 +188,21 @@ namespace WinZoneTrigger
 
         private void ApplyBrightnessSchedule(string reason)
         {
+            if (_config != null && _config.IsAutomationPaused())
+            {
+                return;
+            }
+
             _brightnessScheduleRunner.Apply(_config, reason);
         }
 
         private void StartInitialScan()
         {
+            if (_config != null && _config.IsAutomationPaused())
+            {
+                return;
+            }
+
             if (HasStartupRunOnceZones())
             {
                 StartStartupRetrySequence();
@@ -271,6 +334,10 @@ namespace WinZoneTrigger
         private void StartScan(bool forceScan, bool startupOnly)
         {
             ReloadConfigIfChanged();
+            if (_config != null && _config.IsAutomationPaused())
+            {
+                return;
+            }
             if (_scanInProgress || _appWatchInProgress || _zoneActionInProgress)
             {
                 DiagnosticsLog.WriteEvent("백그라운드 위치 확인 건너뜀: 다른 자동 작업 진행 중");
@@ -536,6 +603,12 @@ namespace WinZoneTrigger
                     _zoneActionInProgress = true;
                     try
                     {
+                        if (IsAutomationPausedInSavedConfig())
+                        {
+                            DiagnosticsLog.WriteEvent("백그라운드 동작 실행 건너뜀: 자동화 임시 정지 중 - " + zone.Name);
+                            return;
+                        }
+
                         ZoneExecutionResult result = ZoneExecutor.Execute(zone, DiagnosticsLog.WriteEvent);
                         bool completed = result != null && result.Completed;
                         UpdateAutomationEvent(
@@ -629,6 +702,11 @@ namespace WinZoneTrigger
 
         private void RunDueAppWatchChecks(bool force, string reason)
         {
+            if (_config != null && _config.IsAutomationPaused())
+            {
+                return;
+            }
+
             if (_appWatchInProgress)
             {
                 DiagnosticsLog.WriteEvent(reason + " 건너뜀: 다른 자동 작업 진행 중");
@@ -666,6 +744,12 @@ namespace WinZoneTrigger
             {
                 foreach (Tuple<ZoneRule, AppWatchItem> target in dueTargets)
                 {
+                    if (IsAutomationPausedInSavedConfig())
+                    {
+                        DiagnosticsLog.WriteEvent(reason + " 건너뜀: 자동화 임시 정지 중");
+                        break;
+                    }
+
                     AppWatchItem item = target.Item2;
                     string processName = AppWatchdog.NormalizeProcessName(item.ProcessName);
                     if (string.IsNullOrWhiteSpace(processName) || string.IsNullOrWhiteSpace(item.LaunchTarget))
@@ -748,10 +832,24 @@ namespace WinZoneTrigger
             }
 
             bool activeAutomation = HasZoneConditionScanZones() || HasAppWatchZones();
+            activeAutomation = activeAutomation && !_config.IsAutomationPaused();
             bool preventSleep = _config.PreventSleepWhileAutomationActive && activeAutomation;
             _powerStateMonitor.SetSleepPrevention(
                 preventSleep,
                 preventSleep ? "백그라운드 자동 감시 활성" : "자동 감시 비활성 또는 설정 꺼짐");
+        }
+
+        private static bool IsAutomationPausedInSavedConfig()
+        {
+            try
+            {
+                AppConfig config = ConfigStore.Load();
+                return config != null && config.IsAutomationPaused();
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private void HandlePowerModeChanged(PowerModes mode)

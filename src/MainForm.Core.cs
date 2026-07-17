@@ -68,6 +68,7 @@ namespace WinZoneTrigger
         private Button _testConditionSummaryButton;
         private Button _testActionsSummaryButton;
         private Button _openConfigSummaryButton;
+        private Button _pauseAutomationButton;
         private Button _operateSummaryButton;
         private Button _stopOperatingSummaryButton;
         private CheckBox _monitoringCheck;
