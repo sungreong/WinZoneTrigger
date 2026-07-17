@@ -189,6 +189,9 @@ namespace WinZoneTrigger
             _detailTabs.Dock = DockStyle.Fill;
             _detailTabs.SizeMode = TabSizeMode.Fixed;
             _detailTabs.ItemSize = new Size(142, 36);
+            _detailTabs.Padding = new Point(12, 5);
+            _detailTabs.DrawMode = TabDrawMode.OwnerDrawFixed;
+            _detailTabs.DrawItem += DrawDetailTab;
             detailShell.Controls.Add(_detailTabs, 0, 1);
 
             _conditionTable = CreateDetailTable();
@@ -459,8 +462,10 @@ namespace WinZoneTrigger
             TableLayoutPanel appPanel = new TableLayoutPanel();
             appPanel.Dock = DockStyle.Fill;
             appPanel.AutoSize = true;
+            appPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             appPanel.ColumnCount = 1;
             appPanel.RowCount = 5;
+            appPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             appPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             appPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             appPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -540,13 +545,16 @@ namespace WinZoneTrigger
             TableLayoutPanel commandPanel = new TableLayoutPanel();
             commandPanel.Dock = DockStyle.Fill;
             commandPanel.AutoSize = true;
+            commandPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             commandPanel.ColumnCount = 1;
             commandPanel.RowCount = 2;
+            commandPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             commandPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             commandPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             FlowLayoutPanel commandHelpPanel = new FlowLayoutPanel();
             commandHelpPanel.AutoSize = true;
+            commandHelpPanel.WrapContents = true;
             commandHelpPanel.Margin = new Padding(0, 0, 0, 6);
             Button commandHelpButton = CreateButton("? 명령어 도움말");
             commandHelpButton.Click += delegate { ShowCommandHelp(); };

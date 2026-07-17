@@ -48,7 +48,22 @@ namespace WinZoneTrigger
             }
 
             _contentGrid.ResumeLayout(true);
+            SetDetailTableLabelWidth(_conditionTable, stacked ? 104 : 128);
+            SetDetailTableLabelWidth(_actionTable, stacked ? 104 : 128);
+            SetDetailTableLabelWidth(_appWatchTable, stacked ? 104 : 128);
+            SetDetailTableLabelWidth(_statusTable, stacked ? 104 : 128);
             ResizeAppWatchItemRows();
+        }
+
+        private static void SetDetailTableLabelWidth(TableLayoutPanel table, int width)
+        {
+            if (table == null || table.ColumnStyles.Count == 0)
+            {
+                return;
+            }
+
+            table.ColumnStyles[0].SizeType = SizeType.Absolute;
+            table.ColumnStyles[0].Width = width;
         }
     }
 }

@@ -226,9 +226,10 @@ namespace WinZoneTrigger
             TableLayoutPanel table = new TableLayoutPanel();
             table.Dock = DockStyle.Top;
             table.AutoSize = true;
+            table.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             table.ColumnCount = 2;
             table.BackColor = UiSurface;
-            table.Padding = new Padding(2, 0, 6, 10);
+            table.Padding = new Padding(8, 0, 10, 16);
             table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
             table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             return table;
@@ -244,10 +245,45 @@ namespace WinZoneTrigger
             scroller.Dock = DockStyle.Fill;
             scroller.AutoScroll = true;
             scroller.BackColor = UiSurface;
-            scroller.Padding = new Padding(0, 5, 0, 0);
+            scroller.Padding = new Padding(0, 8, 0, 0);
             scroller.Controls.Add(table);
+            scroller.Resize += delegate
+            {
+                table.Width = Math.Max(0, scroller.ClientSize.Width - 2);
+            };
+            table.Width = Math.Max(0, scroller.ClientSize.Width - 2);
             page.Controls.Add(scroller);
             return page;
+        }
+
+        private void DrawDetailTab(object sender, DrawItemEventArgs e)
+        {
+            if (_detailTabs == null || e.Index < 0 || e.Index >= _detailTabs.TabPages.Count)
+            {
+                return;
+            }
+
+            bool selected = e.Index == _detailTabs.SelectedIndex;
+            Rectangle bounds = e.Bounds;
+            Color background = selected ? UiAccent : UiSurfaceMuted;
+            Color foreground = selected ? Color.White : UiTextMuted;
+            using (SolidBrush brush = new SolidBrush(background))
+            {
+                e.Graphics.FillRectangle(brush, bounds);
+            }
+
+            using (Pen border = new Pen(selected ? UiAccentDark : UiBorder))
+            {
+                e.Graphics.DrawRectangle(border, bounds.X, bounds.Y, bounds.Width - 1, bounds.Height - 1);
+            }
+
+            TextRenderer.DrawText(
+                e.Graphics,
+                _detailTabs.TabPages[e.Index].Text,
+                Font,
+                bounds,
+                foreground,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         }
 
         private Label CreateSummaryBadge(string text)
