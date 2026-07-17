@@ -79,9 +79,12 @@ namespace WinZoneTrigger
         {
             Text = "설정";
             StartPosition = FormStartPosition.CenterParent;
-            MinimumSize = new Size(640, 620);
-            Size = new Size(700, 720);
-            MaximizeBox = false;
+            Rectangle workingArea = Screen.FromPoint(Cursor.Position).WorkingArea;
+            MinimumSize = new Size(640, 560);
+            Size = new Size(
+                Math.Min(820, Math.Max(640, workingArea.Width - 48)),
+                Math.Min(760, Math.Max(560, workingArea.Height - 48)));
+            MaximizeBox = true;
             MinimizeBox = false;
             ShowIcon = false;
             BackColor = Color.FromArgb(246, 247, 242);

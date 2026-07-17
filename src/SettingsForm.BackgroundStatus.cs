@@ -64,7 +64,11 @@ namespace WinZoneTrigger
             content.Dock = DockStyle.Top;
             content.Margin = new Padding(0);
             panel.Controls.Add(content);
-            panel.Resize += delegate { content.Width = Math.Max(0, panel.ClientSize.Width - 1); };
+            panel.Resize += delegate
+            {
+                content.Width = Math.Max(0, panel.ClientSize.Width - 1);
+                UpdateBackgroundStatusValueWidths(panel.ClientSize.Width);
+            };
             content.Width = Math.Max(0, panel.ClientSize.Width - 1);
 
             Label title = new Label();
@@ -116,6 +120,32 @@ namespace WinZoneTrigger
             _backgroundLastAppWatchValue = CreateStatusValueLabel();
             eventPanel.Controls.Add(CreateStatusValueLine("앱 감시", _backgroundLastAppWatchValue), 0, eventPanel.RowCount++);
             content.Controls.Add(eventPanel, 0, content.RowCount++);
+            UpdateBackgroundStatusValueWidths(panel.ClientSize.Width);
+        }
+
+        private void UpdateBackgroundStatusValueWidths(int panelWidth)
+        {
+            int width = Math.Max(220, panelWidth - 156);
+            Label[] labels = new[]
+            {
+                _backgroundHealthValue,
+                _backgroundProcessValue,
+                _backgroundUpdatedValue,
+                _backgroundActiveZonesValue,
+                _backgroundWifiValue,
+                _backgroundLocationValue,
+                _backgroundLastEventValue,
+                _backgroundLastActionValue,
+                _backgroundLastAppWatchValue
+            };
+
+            foreach (Label label in labels)
+            {
+                if (label != null)
+                {
+                    label.MaximumSize = new Size(width, 0);
+                }
+            }
         }
 
         private void RefreshBackgroundStatus()

@@ -47,6 +47,9 @@ namespace WinZoneTrigger
         private string _currentZoneId;
 
         private TabControl _zoneTabs;
+        private TableLayoutPanel _contentGrid;
+        private TableLayoutPanel _zoneSidebar;
+        private Panel _contentDivider;
         private TabPage _allZonesTab;
         private TabPage _activeZonesTab;
         private TabPage _inactiveZonesTab;
@@ -163,6 +166,8 @@ namespace WinZoneTrigger
             _powerStateMonitor = new PowerStateMonitor(HandlePowerModeChanged);
 
             InitializeComponent();
+            Resize += delegate { ApplyResponsiveLayout(); };
+            ApplyResponsiveLayout();
             ConfigureTray();
             BindConfigToControls();
             ResetScanTimer();

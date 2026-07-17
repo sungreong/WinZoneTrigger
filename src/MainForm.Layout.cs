@@ -22,7 +22,7 @@ namespace WinZoneTrigger
         {
             Text = "위치 자동 실행";
             StartPosition = FormStartPosition.CenterScreen;
-            MinimumSize = new Size(1020, 680);
+            MinimumSize = new Size(760, 600);
             Size = new Size(1180, 820);
             BackColor = UiBackground;
             ForeColor = UiText;
@@ -72,31 +72,31 @@ namespace WinZoneTrigger
             _pauseAutomationButton.Click += delegate { ShowAutomationPauseMenu(); };
             topBar.Controls.Add(_pauseAutomationButton);
 
-            TableLayoutPanel contentGrid = new TableLayoutPanel();
-            contentGrid.Dock = DockStyle.Fill;
-            contentGrid.BackColor = UiBackground;
-            contentGrid.ColumnCount = 3;
-            contentGrid.RowCount = 1;
-            contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 360));
-            contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 5));
-            contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            root.Controls.Add(contentGrid, 0, 1);
+            _contentGrid = new TableLayoutPanel();
+            _contentGrid.Dock = DockStyle.Fill;
+            _contentGrid.BackColor = UiBackground;
+            _contentGrid.ColumnCount = 3;
+            _contentGrid.RowCount = 1;
+            _contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 360));
+            _contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 5));
+            _contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            root.Controls.Add(_contentGrid, 0, 1);
 
-            TableLayoutPanel left = new TableLayoutPanel();
-            left.Dock = DockStyle.Fill;
-            left.RowCount = 3;
-            left.ColumnCount = 1;
-            left.BackColor = UiSurface;
-            left.Padding = new Padding(12, 10, 10, 10);
-            left.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            left.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            left.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            contentGrid.Controls.Add(left, 0, 0);
+            _zoneSidebar = new TableLayoutPanel();
+            _zoneSidebar.Dock = DockStyle.Fill;
+            _zoneSidebar.RowCount = 3;
+            _zoneSidebar.ColumnCount = 1;
+            _zoneSidebar.BackColor = UiSurface;
+            _zoneSidebar.Padding = new Padding(12, 10, 10, 10);
+            _zoneSidebar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _zoneSidebar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            _zoneSidebar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _contentGrid.Controls.Add(_zoneSidebar, 0, 0);
 
-            Panel divider = new Panel();
-            divider.Dock = DockStyle.Fill;
-            divider.BackColor = UiBorder;
-            contentGrid.Controls.Add(divider, 1, 0);
+            _contentDivider = new Panel();
+            _contentDivider.Dock = DockStyle.Fill;
+            _contentDivider.BackColor = UiBorder;
+            _contentGrid.Controls.Add(_contentDivider, 1, 0);
 
             Label zonesLabel = new Label();
             zonesLabel.Text = "등록된 위치";
@@ -105,14 +105,14 @@ namespace WinZoneTrigger
             zonesLabel.AutoSize = true;
             zonesLabel.Margin = new Padding(0, 0, 0, 8);
             zonesLabel.Tag = "SidebarTitle";
-            left.Controls.Add(zonesLabel, 0, 0);
+            _zoneSidebar.Controls.Add(zonesLabel, 0, 0);
 
             _zoneTabs = new TabControl();
             _zoneTabs.Dock = DockStyle.Fill;
             _zoneTabs.Multiline = true;
             _zoneTabs.SizeMode = TabSizeMode.Fixed;
             _zoneTabs.ItemSize = new Size(100, 34);
-            left.Controls.Add(_zoneTabs, 0, 1);
+            _zoneSidebar.Controls.Add(_zoneTabs, 0, 1);
 
             _allZonesTab = new TabPage("전체");
             _activeZonesTab = new TabPage("운영 중");
@@ -138,7 +138,7 @@ namespace WinZoneTrigger
             zoneButtons.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             zoneButtons.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             zoneButtons.Margin = new Padding(0, 10, 0, 0);
-            left.Controls.Add(zoneButtons, 0, 2);
+            _zoneSidebar.Controls.Add(zoneButtons, 0, 2);
 
             Button addZoneButton = CreateButton("새 위치");
             DockSidebarButton(addZoneButton);
@@ -172,7 +172,7 @@ namespace WinZoneTrigger
             detailHost.AutoScroll = false;
             detailHost.BackColor = UiSurface;
             detailHost.Padding = new Padding(10, 6, 10, 8);
-            contentGrid.Controls.Add(detailHost, 2, 0);
+            _contentGrid.Controls.Add(detailHost, 2, 0);
 
             TableLayoutPanel detailShell = new TableLayoutPanel();
             detailShell.Dock = DockStyle.Fill;
@@ -647,30 +647,39 @@ namespace WinZoneTrigger
             appWatchTargetPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             appWatchTargetPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-            FlowLayoutPanel appWatchTargetInputPanel = new FlowLayoutPanel();
+            TableLayoutPanel appWatchTargetInputPanel = new TableLayoutPanel();
             appWatchTargetInputPanel.Dock = DockStyle.Fill;
             appWatchTargetInputPanel.AutoSize = true;
-            appWatchTargetInputPanel.WrapContents = true;
+            appWatchTargetInputPanel.ColumnCount = 1;
+            appWatchTargetInputPanel.RowCount = 2;
+            appWatchTargetInputPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            appWatchTargetInputPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             appWatchTargetInputPanel.Margin = new Padding(0, 0, 0, 6);
 
             _appWatchTargetText = new TextBox();
-            _appWatchTargetText.Width = 330;
-            appWatchTargetInputPanel.Controls.Add(_appWatchTargetText);
+            _appWatchTargetText.Dock = DockStyle.Fill;
+            appWatchTargetInputPanel.Controls.Add(_appWatchTargetText, 0, 0);
+
+            FlowLayoutPanel appWatchTargetButtons = new FlowLayoutPanel();
+            appWatchTargetButtons.AutoSize = true;
+            appWatchTargetButtons.WrapContents = true;
+            appWatchTargetButtons.Margin = new Padding(0, 6, 0, 0);
 
             Button findAppWatchTargetButton = CreateButton("앱 찾기");
             SetFixedButtonSize(findAppWatchTargetButton, 78, 30);
             findAppWatchTargetButton.Click += delegate { ShowAppWatchPicker(); };
-            appWatchTargetInputPanel.Controls.Add(findAppWatchTargetButton);
+            appWatchTargetButtons.Controls.Add(findAppWatchTargetButton);
 
             Button browseAppWatchTargetButton = CreateButton("파일 선택");
             SetFixedButtonSize(browseAppWatchTargetButton, 86, 30);
             browseAppWatchTargetButton.Click += delegate { BrowseAppWatchFile(); };
-            appWatchTargetInputPanel.Controls.Add(browseAppWatchTargetButton);
+            appWatchTargetButtons.Controls.Add(browseAppWatchTargetButton);
 
             Button testAppWatchLaunchButton = CreateButton("실행 테스트");
             SetFixedButtonSize(testAppWatchLaunchButton, 92, 30);
             testAppWatchLaunchButton.Click += delegate { TestAppWatchLaunchTarget(); };
-            appWatchTargetInputPanel.Controls.Add(testAppWatchLaunchButton);
+            appWatchTargetButtons.Controls.Add(testAppWatchLaunchButton);
+            appWatchTargetInputPanel.Controls.Add(appWatchTargetButtons, 0, 1);
 
             Label appWatchTargetHint = new Label();
             appWatchTargetHint.Dock = DockStyle.Fill;

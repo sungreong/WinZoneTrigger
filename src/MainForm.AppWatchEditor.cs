@@ -341,13 +341,16 @@ namespace WinZoneTrigger
 
         private Control CreateAppWatchItemRow(ZoneRule zone, AppWatchItem item)
         {
-            FlowLayoutPanel row = new FlowLayoutPanel();
+            TableLayoutPanel row = new TableLayoutPanel();
             row.AutoSize = false;
-            row.Width = 610;
+            row.Width = GetAppWatchItemRowWidth();
             row.Height = GetTextRowHeight(Font, 16, 42);
-            row.WrapContents = false;
             row.Margin = new Padding(2, 2, 8, 2);
             row.Tag = item.Id;
+            row.ColumnCount = 2;
+            row.RowCount = 1;
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
             CheckBox toggle = new CheckBox();
             toggle.Appearance = Appearance.Normal;
@@ -389,7 +392,9 @@ namespace WinZoneTrigger
             row.Controls.Add(toggle);
 
             Button chip = CreateValueChip(item.Id, BuildAppWatchItemChipText(item), string.Equals(_selectedAppWatchItemId, item.Id, StringComparison.OrdinalIgnoreCase));
-            chip.Size = new Size(500, Math.Max(32, row.Height - 8));
+            chip.Dock = DockStyle.Fill;
+            chip.AutoEllipsis = true;
+            chip.Height = Math.Max(32, row.Height - 8);
             chip.Margin = new Padding(0, 4, 4, 4);
             chip.TextAlign = ContentAlignment.MiddleLeft;
             if (_toolTip != null)
@@ -408,9 +413,28 @@ namespace WinZoneTrigger
                 RenderAppWatchItems();
                 RefreshSelectedAppWatchStatusLabel();
             };
-            row.Controls.Add(chip);
+            row.Controls.Add(chip, 1, 0);
 
             return row;
+        }
+
+        private int GetAppWatchItemRowWidth()
+        {
+            return Math.Max(220, (_appWatchItemsPanel == null ? 420 : _appWatchItemsPanel.ClientSize.Width - 20));
+        }
+
+        private void ResizeAppWatchItemRows()
+        {
+            if (_appWatchItemsPanel == null || _appWatchItemsPanel.IsDisposed)
+            {
+                return;
+            }
+
+            int width = GetAppWatchItemRowWidth();
+            foreach (Control control in _appWatchItemsPanel.Controls)
+            {
+                control.Width = width;
+            }
         }
 
         private void EnsureSelectedAppWatchItem(ZoneRule zone)

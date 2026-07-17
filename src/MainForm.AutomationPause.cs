@@ -38,7 +38,16 @@ namespace WinZoneTrigger
             CaptureCurrentZone();
             CaptureGlobalSettings();
             _config.AutomationPausedUntilUtc = DateTime.UtcNow.Add(duration);
-            SaveAutomationPauseSetting("자동화를 " + FormatPauseUntil(_config.AutomationPausedUntilUtc.Value) + "까지 임시 정지했습니다.");
+            DateTime untilUtc = _config.AutomationPausedUntilUtc.Value;
+            if (SaveAutomationPauseSetting("자동화를 " + FormatPauseUntil(untilUtc) + "까지 임시 정지했습니다."))
+            {
+                MessageBox.Show(
+                    this,
+                    "자동화를 " + FormatPauseUntil(untilUtc) + "까지 정지했습니다.\r\n상단 버튼에도 정지 종료 시각이 표시됩니다.",
+                    "자동화 임시 정지",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
         }
 
         private void ResumeAutomation()
@@ -49,7 +58,7 @@ namespace WinZoneTrigger
             SaveAutomationPauseSetting("자동화 임시 정지를 해제했습니다.");
         }
 
-        private void SaveAutomationPauseSetting(string message)
+        private bool SaveAutomationPauseSetting(string message)
         {
             try
             {
@@ -57,11 +66,13 @@ namespace WinZoneTrigger
                 EnsureBackgroundAutomationRunningAfterSave();
                 UpdateAutomationPauseButton();
                 AppendLog(message);
+                return true;
             }
             catch (Exception ex)
             {
                 AppendLog("자동화 임시 정지 설정 저장 실패: " + ex.Message);
                 MessageBox.Show(this, ex.Message, "임시 정지 저장 실패", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
             }
         }
 
@@ -81,9 +92,8 @@ namespace WinZoneTrigger
                 return;
             }
 
-            _pauseAutomationButton.Text = "임시 정지";
-            _pauseAutomationButton.UseVisualStyleBackColor = true;
-            _pauseAutomationButton.ForeColor = UiText;
+            _pauseAutomationButton.Text = "자동화 실행 중 · 임시 정지";
+            StyleButton(_pauseAutomationButton, ButtonTone.Default);
             EnsureToolTip().SetToolTip(_pauseAutomationButton, "자동 실행, 앱 감시, 화면 밝기 일정을 잠시 멈춥니다.");
         }
 
