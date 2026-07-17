@@ -25,8 +25,8 @@ namespace WinZoneTrigger
             int metaRowHeight = GetTextRowHeight(Font, 8, 28);
             int badgeRowHeight = GetTextRowHeight(Font, 10, 30);
             int textStackHeight = titleRowHeight + metaRowHeight + badgeRowHeight;
-            int toolbarRowHeight = UiMetrics.InputHeight + UiMetrics.SpaceSm;
-            int summaryHeight = 16 + textStackHeight + toolbarRowHeight;
+            int toolbarRowHeight = UiMetrics.GetTextControlHeight(Font) + UiMetrics.SpaceSm;
+            int summaryHeight = (UiMetrics.SpaceSm * 2) + textStackHeight + toolbarRowHeight;
 
             TableLayoutPanel summary = new TableLayoutPanel();
             summary.Dock = DockStyle.Top;
@@ -91,23 +91,27 @@ namespace WinZoneTrigger
             FlowLayoutPanel buttons = new FlowLayoutPanel();
             buttons.Dock = DockStyle.Fill;
             buttons.AutoSize = false;
-            buttons.Height = UiMetrics.InputHeight;
+            buttons.Height = UiMetrics.GetTextControlHeight(Font);
             buttons.WrapContents = false;
             buttons.FlowDirection = FlowDirection.LeftToRight;
-            buttons.Margin = new Padding(0, 8, 0, 0);
+            buttons.Margin = new Padding(0, UiMetrics.SpaceXs, 0, 0);
             buttons.Padding = new Padding(0);
             buttons.BackColor = UiSurfaceMuted;
 
             _saveSummaryButton = CreateButton("저장");
+            PrepareSummaryActionButton(_saveSummaryButton);
             _saveSummaryButton.Click += delegate { SaveFromUi(); };
 
             _testConditionSummaryButton = CreateButton("조건 테스트");
+            PrepareSummaryActionButton(_testConditionSummaryButton);
             _testConditionSummaryButton.Click += delegate { TestSelectedZoneCondition(); };
 
             _operateSummaryButton = CreateButton("운영하기");
+            PrepareSummaryActionButton(_operateSummaryButton);
             _operateSummaryButton.Click += ToggleSelectedZoneOperating;
 
             Button moreButton = CreateButton("더보기");
+            PrepareSummaryActionButton(moreButton);
             moreButton.Click += delegate { ShowSummaryMoreMenu(moreButton); };
 
             buttons.Controls.Add(_saveSummaryButton);
@@ -118,6 +122,18 @@ namespace WinZoneTrigger
             summary.Controls.Add(textStack, 0, 0);
             summary.Controls.Add(buttons, 0, 1);
             return summary;
+        }
+
+        private void PrepareSummaryActionButton(Button button)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            int height = UiMetrics.GetTextControlHeight(button.Font ?? Font);
+            button.MinimumSize = new Size(button.MinimumSize.Width, height);
+            button.Margin = new Padding(0, 0, UiMetrics.SpaceSm, 0);
         }
 
         private static int GetTextRowHeight(Font font, int extraPixels, int minimum)
@@ -643,7 +659,7 @@ namespace WinZoneTrigger
             button.Text = text;
             button.AutoSize = true;
             button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            button.MinimumSize = new Size(74, UiMetrics.InputHeight);
+            button.MinimumSize = new Size(74, UiMetrics.GetTextControlHeight(Font));
             button.Padding = new Padding(UiMetrics.SpaceMd, UiMetrics.SpaceXs / 2, UiMetrics.SpaceMd, UiMetrics.SpaceXs / 2);
             button.Margin = new Padding(4);
             button.Cursor = Cursors.Hand;
@@ -660,7 +676,7 @@ namespace WinZoneTrigger
 
             Size measured = TextRenderer.MeasureText(button.Text ?? "", button.Font ?? Font);
             width = Math.Max(width, measured.Width + 48);
-            height = Math.Max(height, UiMetrics.InputHeight);
+            height = Math.Max(height, UiMetrics.GetTextControlHeight(button.Font ?? Font));
             button.AutoSize = false;
             button.Size = new Size(width, height);
             button.MinimumSize = new Size(width, height);
@@ -675,9 +691,10 @@ namespace WinZoneTrigger
 
             button.Dock = DockStyle.Fill;
             button.AutoSize = false;
-            button.MinimumSize = new Size(0, UiMetrics.SidebarActionHeight);
-            button.Height = UiMetrics.SidebarActionHeight;
-            button.Margin = new Padding(4, 4, 4, 4);
+            int height = UiMetrics.GetSidebarActionHeight(button.Font ?? Font);
+            button.MinimumSize = new Size(0, height);
+            button.Height = height;
+            button.Margin = new Padding(0, 0, UiMetrics.SpaceSm, UiMetrics.SpaceXs);
         }
 
         private ButtonTone ResolveButtonTone(string text)

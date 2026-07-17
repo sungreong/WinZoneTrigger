@@ -1,3 +1,4 @@
+using System;
 using System.Drawing;
 using System.Windows.Forms;
 
@@ -17,6 +18,18 @@ namespace WinZoneTrigger
         internal const int SidebarActionHeight = 36;
         internal const int DesktopLabelColumnWidth = 120;
         internal const int CompactLabelColumnWidth = 96;
+
+        internal static int GetTextControlHeight(Font font)
+        {
+            Font effectiveFont = font ?? SystemFonts.MessageBoxFont;
+            int textHeight = TextRenderer.MeasureText("가", effectiveFont).Height;
+            return Math.Max(InputHeight, textHeight + (SpaceXs * 2));
+        }
+
+        internal static int GetSidebarActionHeight(Font font)
+        {
+            return Math.Max(SidebarActionHeight, GetTextControlHeight(font) + SpaceXs);
+        }
 
         internal static TextBox CreateTextBox()
         {

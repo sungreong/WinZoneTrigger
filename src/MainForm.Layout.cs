@@ -135,16 +135,17 @@ namespace WinZoneTrigger
             _inactiveZonesTab.Controls.Add(_inactiveZoneList);
 
             TableLayoutPanel zoneButtons = new TableLayoutPanel();
+            int sidebarActionRowHeight = UiMetrics.GetSidebarActionHeight(Font) + UiMetrics.SpaceXs;
             zoneButtons.Dock = DockStyle.Fill;
             zoneButtons.AutoSize = false;
-            zoneButtons.Height = 80;
-            zoneButtons.MinimumSize = new Size(0, 80);
+            zoneButtons.Height = sidebarActionRowHeight * 2;
+            zoneButtons.MinimumSize = new Size(0, sidebarActionRowHeight * 2);
             zoneButtons.ColumnCount = 2;
             zoneButtons.RowCount = 2;
             zoneButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
             zoneButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-            zoneButtons.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            zoneButtons.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            zoneButtons.RowStyles.Add(new RowStyle(SizeType.Absolute, sidebarActionRowHeight));
+            zoneButtons.RowStyles.Add(new RowStyle(SizeType.Absolute, sidebarActionRowHeight));
             zoneButtons.Margin = new Padding(0, 10, 0, 0);
             _zoneSidebar.Controls.Add(zoneButtons, 0, 2);
 
