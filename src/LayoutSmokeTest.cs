@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Imaging;
+using System.IO;
 using System.Windows.Forms;
 
 namespace WinZoneTrigger
@@ -17,7 +19,7 @@ namespace WinZoneTrigger
             new Size(1180, 820)
         };
 
-        internal static int Run()
+        internal static int Run(bool savePreviews)
         {
             List<string> failures = new List<string>();
             try
@@ -27,30 +29,25 @@ namespace WinZoneTrigger
 
                 using (MainForm form = new MainForm(false, false, false))
                 {
-                    form.StartPosition = FormStartPosition.Manual;
-                    form.Location = new Point(-10000, -10000);
-                    form.ShowInTaskbar = false;
-                    form.Opacity = 0;
-                    form.Show();
+                    RunLayoutPasses(form, "main", Viewports, failures, savePreviews);
+                }
 
-                    foreach (Size viewport in Viewports)
+                using (SettingsForm form = new SettingsForm(false, false, true, true, 70, new List<BrightnessPeriod>(), false))
+                {
+                    RunLayoutPasses(form, "settings", new[]
                     {
-                        form.ClientSize = viewport;
-                        form.PerformLayout();
-                        Application.DoEvents();
-                        foreach (TabControl tabs in FindTabControls(form))
-                        {
-                            for (int index = 0; index < tabs.TabPages.Count; index++)
-                            {
-                                tabs.SelectedIndex = index;
-                                form.PerformLayout();
-                                Application.DoEvents();
-                                FindHorizontalOverflows(form, viewport, failures);
-                            }
-                        }
-                    }
+                        new Size(640, 560),
+                        new Size(820, 700)
+                    }, failures, savePreviews);
+                }
 
-                    form.Close();
+                using (AppPickerForm form = new AppPickerForm())
+                {
+                    RunLayoutPasses(form, "app-picker", new[]
+                    {
+                        new Size(500, 360),
+                        new Size(560, 440)
+                    }, failures, savePreviews);
                 }
             }
             catch (Exception ex)
@@ -65,8 +62,61 @@ namespace WinZoneTrigger
                 return 1;
             }
 
-            DiagnosticsLog.WriteEvent("레이아웃 스모크 테스트 통과: 720, 900, 1000, 1180px");
+            DiagnosticsLog.WriteEvent("레이아웃 스모크 테스트 통과: 메인 720/900/1000/1180px, 설정 640/820px, 앱 선택 500/560px");
             return 0;
+        }
+
+        private static void RunLayoutPasses(Form form, string formName, IEnumerable<Size> viewports, List<string> failures, bool savePreviews)
+        {
+            PrepareFormForLayoutTest(form);
+            foreach (Size viewport in viewports)
+            {
+                bool savedTabPreview = false;
+                form.ClientSize = viewport;
+                form.PerformLayout();
+                Application.DoEvents();
+                foreach (TabControl tabs in FindTabControls(form))
+                {
+                    for (int index = 0; index < tabs.TabPages.Count; index++)
+                    {
+                        tabs.SelectedIndex = index;
+                        form.PerformLayout();
+                        Application.DoEvents();
+                        FindHorizontalOverflows(form, viewport, failures);
+                        if (savePreviews)
+                        {
+                            SavePreview(form, formName + "-tab" + (index + 1), viewport);
+                            savedTabPreview = true;
+                        }
+                    }
+                }
+
+                if (savePreviews && !savedTabPreview)
+                {
+                    SavePreview(form, formName, viewport);
+                }
+            }
+        }
+
+        private static void PrepareFormForLayoutTest(Form form)
+        {
+            form.StartPosition = FormStartPosition.Manual;
+            form.Location = new Point(-10000, -10000);
+            form.ShowInTaskbar = false;
+            form.Opacity = 0;
+            form.Show();
+        }
+
+        private static void SavePreview(Form form, string formName, Size viewport)
+        {
+            string folder = Path.Combine(ConfigStore.ConfigDirectory, "layout-preview");
+            Directory.CreateDirectory(folder);
+            string path = Path.Combine(folder, formName + "-" + viewport.Width + "x" + viewport.Height + ".png");
+            using (Bitmap bitmap = new Bitmap(Math.Max(1, form.Width), Math.Max(1, form.Height)))
+            {
+                form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
+                bitmap.Save(path, ImageFormat.Png);
+            }
         }
 
         private static void FindHorizontalOverflows(Control root, Size viewport, List<string> failures)

@@ -34,7 +34,7 @@ namespace WinZoneTrigger
             }
             else
             {
-                int sidebarWidth = ClientSize.Width < 1240 ? 292 : 332;
+                int sidebarWidth = ClientSize.Width < 1240 ? 320 : 332;
                 _contentGrid.ColumnCount = 3;
                 _contentGrid.RowCount = 1;
                 _contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, sidebarWidth));
@@ -59,13 +59,32 @@ namespace WinZoneTrigger
                 _detailTabs.ItemSize = new Size(tabWidth, 34);
             }
 
+            if (_zoneTabs != null)
+            {
+                _zoneTabs.ItemSize = new Size(compact || ClientSize.Width >= 1240 ? 100 : 90, 34);
+            }
+
             _contentGrid.ResumeLayout(true);
             SetDetailTableLabelWidth(_conditionTable, compact ? 96 : 118);
             SetDetailTableLabelWidth(_actionTable, compact ? 96 : 118);
             SetDetailTableLabelWidth(_appWatchTable, compact ? 96 : 118);
             SetDetailTableLabelWidth(_statusTable, compact ? 96 : 118);
-            ConfigureCoordinateLayout(compact);
+            ConfigureCoordinateLayout(ShouldUseCompactCoordinateLayout(compact));
             ResizeAppWatchItemRows();
+        }
+
+        private bool ShouldUseCompactCoordinateLayout(bool compactWindow)
+        {
+            if (compactWindow || _conditionTable == null)
+            {
+                return true;
+            }
+
+            int labelColumnWidth = _conditionTable.ColumnStyles.Count == 0
+                ? 118
+                : Convert.ToInt32(_conditionTable.ColumnStyles[0].Width);
+            int inputWidth = _conditionTable.ClientSize.Width - _conditionTable.Padding.Horizontal - labelColumnWidth;
+            return inputWidth < 620;
         }
 
         private void ConfigureCoordinateLayout(bool compact)
@@ -162,7 +181,7 @@ namespace WinZoneTrigger
             menu.Show(_zonePickerButton, new Point(0, _zonePickerButton.Height));
         }
 
-        private static void SetDetailTableLabelWidth(TableLayoutPanel table, int width)
+        private void SetDetailTableLabelWidth(TableLayoutPanel table, int width)
         {
             if (table == null || table.ColumnStyles.Count == 0)
             {
@@ -171,6 +190,7 @@ namespace WinZoneTrigger
 
             table.ColumnStyles[0].SizeType = SizeType.Absolute;
             table.ColumnStyles[0].Width = width;
+            UpdateDetailTableWrappedLabels(table);
         }
     }
 }

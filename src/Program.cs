@@ -30,7 +30,12 @@ namespace WinZoneTrigger
 
             if (HasArgument(args, "--layout-self-test"))
             {
-                return LayoutSmokeTest.Run();
+                return LayoutSmokeTest.Run(false);
+            }
+
+            if (HasArgument(args, "--layout-preview"))
+            {
+                return LayoutSmokeTest.Run(true);
             }
 
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);

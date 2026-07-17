@@ -250,10 +250,36 @@ namespace WinZoneTrigger
             scroller.Resize += delegate
             {
                 table.Width = Math.Max(0, scroller.ClientSize.Width - 2);
+                UpdateDetailTableWrappedLabels(table);
             };
             table.Width = Math.Max(0, scroller.ClientSize.Width - 2);
+            UpdateDetailTableWrappedLabels(table);
             page.Controls.Add(scroller);
             return page;
+        }
+
+        private void UpdateDetailTableWrappedLabels(TableLayoutPanel table)
+        {
+            if (table == null || table.ColumnStyles.Count < 2)
+            {
+                return;
+            }
+
+            int labelColumnWidth = Convert.ToInt32(table.ColumnStyles[0].Width);
+            int contentWidth = Math.Max(160, table.ClientSize.Width - table.Padding.Horizontal - labelColumnWidth - 12);
+            foreach (Control control in table.Controls)
+            {
+                Label label = control as Label;
+                if (label == null
+                    || !label.AutoSize
+                    || label.MaximumSize.Width <= 0
+                    || table.GetColumn(label) != 1)
+                {
+                    continue;
+                }
+
+                label.MaximumSize = new Size(contentWidth, 0);
+            }
         }
 
         private void DrawDetailTab(object sender, DrawItemEventArgs e)

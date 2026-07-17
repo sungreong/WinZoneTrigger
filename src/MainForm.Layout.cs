@@ -134,8 +134,10 @@ namespace WinZoneTrigger
             _inactiveZonesTab.Controls.Add(_inactiveZoneList);
 
             TableLayoutPanel zoneButtons = new TableLayoutPanel();
-            zoneButtons.Dock = DockStyle.Top;
-            zoneButtons.AutoSize = true;
+            zoneButtons.Dock = DockStyle.Fill;
+            zoneButtons.AutoSize = false;
+            zoneButtons.Height = 80;
+            zoneButtons.MinimumSize = new Size(0, 80);
             zoneButtons.ColumnCount = 2;
             zoneButtons.RowCount = 2;
             zoneButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));

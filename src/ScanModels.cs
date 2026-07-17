@@ -35,8 +35,7 @@ namespace WinZoneTrigger
         public override string ToString()
         {
             string name = string.IsNullOrWhiteSpace(Name) ? "이름 없는 앱" : Name;
-            string target = !string.IsNullOrWhiteSpace(AppId) ? AppId : Target;
-            return string.IsNullOrWhiteSpace(target) ? name : name + " · " + target;
+            return string.IsNullOrWhiteSpace(Source) ? name : name + " · " + Source;
         }
     }
 

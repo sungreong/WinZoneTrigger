@@ -24,6 +24,7 @@ namespace WinZoneTrigger
         private readonly Button _refreshButton;
         private readonly Button _addButton;
         private readonly Button _cancelButton;
+        private readonly TableLayoutPanel _searchRow;
         private List<AppSearchCandidate> _candidates;
 
         public List<string> SelectedTargets { get; private set; }
@@ -59,25 +60,22 @@ namespace WinZoneTrigger
             title.Margin = new Padding(0, 0, 0, 6);
             root.Controls.Add(title, 0, 0);
 
-            TableLayoutPanel searchRow = new TableLayoutPanel();
-            searchRow.Dock = DockStyle.Fill;
-            searchRow.AutoSize = true;
-            searchRow.ColumnCount = 2;
-            searchRow.RowCount = 1;
-            searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            searchRow.Margin = new Padding(0, 0, 0, 8);
+            _searchRow = new TableLayoutPanel();
+            _searchRow.Dock = DockStyle.Fill;
+            _searchRow.AutoSize = true;
+            _searchRow.Margin = new Padding(0, 0, 0, 8);
 
             _searchText = new TextBox();
             _searchText.Dock = DockStyle.Fill;
+            _searchText.AutoSize = false;
+            _searchText.Height = 30;
             _searchText.Margin = new Padding(0, 0, 8, 0);
             _searchText.TextChanged += delegate { LoadCandidates(_searchText.Text); };
-            searchRow.Controls.Add(_searchText, 0, 0);
 
             _refreshButton = CreateDialogButton("새로고침", false);
             _refreshButton.Click += delegate { LoadCandidates(_searchText.Text, true); };
-            searchRow.Controls.Add(_refreshButton, 1, 0);
-            root.Controls.Add(searchRow, 0, 1);
+            ConfigureSearchRow(false);
+            root.Controls.Add(_searchRow, 0, 1);
 
             Label hint = new Label();
             hint.Text = "시작 메뉴와 설치된 앱을 검색합니다. Ctrl 또는 Shift로 여러 앱을 선택할 수 있습니다.";
@@ -126,6 +124,8 @@ namespace WinZoneTrigger
 
             LoadCandidates("");
             _searchText.Focus();
+            Resize += delegate { ConfigureSearchRow(ClientSize.Width < 540); };
+            ConfigureSearchRow(ClientSize.Width < 540);
         }
 
         private Button CreateDialogButton(string text, bool primary)
@@ -133,7 +133,7 @@ namespace WinZoneTrigger
             Button button = new Button();
             button.Text = text;
             button.AutoSize = false;
-            button.Size = new Size(Math.Max(80, TextRenderer.MeasureText(text, Font).Width + 34), 32);
+            button.Size = new Size(Math.Max(80, TextRenderer.MeasureText(text, Font).Width + 34), 30);
             button.Margin = new Padding(6, 0, 0, 0);
             button.Cursor = Cursors.Hand;
             button.FlatStyle = FlatStyle.Standard;
@@ -141,6 +141,41 @@ namespace WinZoneTrigger
             button.ForeColor = SystemColors.ControlText;
 
             return button;
+        }
+
+        private void ConfigureSearchRow(bool compact)
+        {
+            _searchRow.SuspendLayout();
+            _searchRow.Controls.Clear();
+            _searchRow.ColumnStyles.Clear();
+            _searchRow.RowStyles.Clear();
+
+            if (compact)
+            {
+                _searchRow.ColumnCount = 1;
+                _searchRow.RowCount = 2;
+                _searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                _searchRow.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                _searchRow.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                _searchText.Margin = new Padding(0, 0, 0, 6);
+                _refreshButton.Margin = new Padding(0, 0, 0, 0);
+                _searchRow.Controls.Add(_searchText, 0, 0);
+                _searchRow.Controls.Add(_refreshButton, 0, 1);
+            }
+            else
+            {
+                _searchRow.ColumnCount = 2;
+                _searchRow.RowCount = 1;
+                _searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                _searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+                _searchRow.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                _searchText.Margin = new Padding(0, 0, 8, 0);
+                _refreshButton.Margin = new Padding(0, 0, 0, 0);
+                _searchRow.Controls.Add(_searchText, 0, 0);
+                _searchRow.Controls.Add(_refreshButton, 1, 0);
+            }
+
+            _searchRow.ResumeLayout(true);
         }
 
         private void LoadCandidates(string query)
@@ -201,7 +236,7 @@ namespace WinZoneTrigger
             int count = _resultList.SelectedItems.Count;
             _addButton.Enabled = count > 0;
             _addButton.Text = count <= 1 ? "선택한 앱 등록" : "선택한 앱 " + count + "개 등록";
-            _addButton.Size = new Size(Math.Max(112, TextRenderer.MeasureText(_addButton.Text, Font).Width + 34), 32);
+            _addButton.Size = new Size(Math.Max(112, TextRenderer.MeasureText(_addButton.Text, Font).Width + 34), 30);
         }
 
         private void AcceptSelection()
