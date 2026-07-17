@@ -14,18 +14,36 @@ namespace WinZoneTrigger
                 return;
             }
 
-            ContextMenuStrip menu = new ContextMenuStrip();
-            menu.Items.Add("30분 동안 정지", null, delegate { PauseAutomationFor(TimeSpan.FromMinutes(30)); });
-            menu.Items.Add("1시간 동안 정지", null, delegate { PauseAutomationFor(TimeSpan.FromHours(1)); });
-            menu.Items.Add("2시간 동안 정지", null, delegate { PauseAutomationFor(TimeSpan.FromHours(2)); });
-            menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add("오늘 자정까지 정지", null, delegate
+            if (_automationPauseMenu == null || _automationPauseMenu.IsDisposed)
             {
-                TimeSpan remaining = DateTime.Today.AddDays(1) - DateTime.Now;
-                PauseAutomationFor(remaining);
-            });
-            menu.Closed += delegate { menu.Dispose(); };
-            menu.Show(_pauseAutomationButton, new Point(0, _pauseAutomationButton.Height));
+                _automationPauseMenu = CreateAutomationPauseMenu();
+            }
+
+            _automationPauseMenu.Show(_pauseAutomationButton, new Point(0, _pauseAutomationButton.Height));
+        }
+
+        private ContextMenuStrip CreateAutomationPauseMenu()
+        {
+            ContextMenuStrip menu = new ContextMenuStrip();
+            AddPauseMenuItem(menu, "30분 동안 정지", TimeSpan.FromMinutes(30));
+            AddPauseMenuItem(menu, "1시간 동안 정지", TimeSpan.FromHours(1));
+            AddPauseMenuItem(menu, "2시간 동안 정지", TimeSpan.FromHours(2));
+            AddPauseMenuItem(menu, "12시간 동안 정지", TimeSpan.FromHours(12));
+            menu.Items.Add(new ToolStripSeparator());
+            ToolStripMenuItem midnightItem = new ToolStripMenuItem("오늘 자정까지 정지");
+            midnightItem.Click += delegate
+            {
+                PauseAutomationFor(DateTime.Today.AddDays(1) - DateTime.Now);
+            };
+            menu.Items.Add(midnightItem);
+            return menu;
+        }
+
+        private void AddPauseMenuItem(ContextMenuStrip menu, string text, TimeSpan duration)
+        {
+            ToolStripMenuItem item = new ToolStripMenuItem(text);
+            item.Click += delegate { PauseAutomationFor(duration); };
+            menu.Items.Add(item);
         }
 
         private void PauseAutomationFor(TimeSpan duration)
@@ -39,7 +57,7 @@ namespace WinZoneTrigger
             CaptureGlobalSettings();
             _config.AutomationPausedUntilUtc = DateTime.UtcNow.Add(duration);
             DateTime untilUtc = _config.AutomationPausedUntilUtc.Value;
-            if (SaveAutomationPauseSetting("자동화를 " + FormatPauseUntil(untilUtc) + "까지 임시 정지했습니다."))
+            if (SaveAutomationPauseSetting("자동화를 " + FormatPauseUntil(untilUtc) + "까지 임시 정지했습니다.", true))
             {
                 MessageBox.Show(
                     this,
@@ -55,14 +73,21 @@ namespace WinZoneTrigger
             CaptureCurrentZone();
             CaptureGlobalSettings();
             _config.AutomationPausedUntilUtc = null;
-            SaveAutomationPauseSetting("자동화 임시 정지를 해제했습니다.");
+            SaveAutomationPauseSetting("자동화 임시 정지를 해제했습니다.", false);
         }
 
-        private bool SaveAutomationPauseSetting(string message)
+        private bool SaveAutomationPauseSetting(string message, bool expectPaused)
         {
             try
             {
                 ConfigStore.Save(_config);
+                AppConfig saved = ConfigStore.Load();
+                if (saved == null || saved.IsAutomationPaused() != expectPaused)
+                {
+                    throw new InvalidOperationException(expectPaused
+                        ? "임시 정지 시간이 설정 파일에 저장되지 않았습니다."
+                        : "임시 정지 해제가 설정 파일에 저장되지 않았습니다.");
+                }
                 EnsureBackgroundAutomationRunningAfterSave();
                 UpdateAutomationPauseButton();
                 AppendLog(message);
