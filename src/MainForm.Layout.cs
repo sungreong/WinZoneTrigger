@@ -22,7 +22,7 @@ namespace WinZoneTrigger
         {
             Text = "위치 자동 실행";
             StartPosition = FormStartPosition.CenterScreen;
-            MinimumSize = new Size(760, 600);
+            MinimumSize = new Size(720, 600);
             Size = new Size(1180, 820);
             BackColor = UiBackground;
             ForeColor = UiText;
@@ -67,6 +67,11 @@ namespace WinZoneTrigger
             Button settingsButton = CreateButton("설정");
             settingsButton.Click += delegate { OpenSettingsDialog(); };
             topBar.Controls.Add(settingsButton);
+
+            _zonePickerButton = CreateButton("위치 선택");
+            _zonePickerButton.Visible = false;
+            _zonePickerButton.Click += delegate { ShowCompactZonePicker(); };
+            topBar.Controls.Add(_zonePickerButton);
 
             _pauseAutomationButton = CreateButton("임시 정지");
             _pauseAutomationButton.Click += delegate { ShowAutomationPauseMenu(); };
@@ -167,12 +172,12 @@ namespace WinZoneTrigger
             removeZoneButton.Click += delegate { RemoveSelectedZone(); };
             zoneButtons.Controls.Add(removeZoneButton, 1, 1);
 
-            Panel detailHost = new Panel();
-            detailHost.Dock = DockStyle.Fill;
-            detailHost.AutoScroll = false;
-            detailHost.BackColor = UiSurface;
-            detailHost.Padding = new Padding(10, 6, 10, 8);
-            _contentGrid.Controls.Add(detailHost, 2, 0);
+            _detailHost = new Panel();
+            _detailHost.Dock = DockStyle.Fill;
+            _detailHost.AutoScroll = false;
+            _detailHost.BackColor = UiSurface;
+            _detailHost.Padding = new Padding(10, 6, 10, 8);
+            _contentGrid.Controls.Add(_detailHost, 2, 0);
 
             TableLayoutPanel detailShell = new TableLayoutPanel();
             detailShell.Dock = DockStyle.Fill;
@@ -181,7 +186,7 @@ namespace WinZoneTrigger
             detailShell.RowCount = 2;
             detailShell.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             detailShell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            detailHost.Controls.Add(detailShell);
+            _detailHost.Controls.Add(detailShell);
 
             detailShell.Controls.Add(CreateSelectedZoneSummaryBar(), 0, 0);
 
@@ -254,48 +259,35 @@ namespace WinZoneTrigger
             _useCoordinatesCheck.CheckedChanged += delegate { SetCoordinateInputsEnabled(); };
             AddRowTo(_conditionTable, "좌표 조건", _useCoordinatesCheck);
 
-            TableLayoutPanel coordinatesPanel = new TableLayoutPanel();
-            coordinatesPanel.Dock = DockStyle.Fill;
-            coordinatesPanel.AutoSize = true;
-            coordinatesPanel.ColumnCount = 8;
-            coordinatesPanel.RowCount = 1;
-            coordinatesPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 48));
-            coordinatesPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 126));
-            coordinatesPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 48));
-            coordinatesPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 126));
-            coordinatesPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 74));
-            coordinatesPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
-            coordinatesPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 12));
-            coordinatesPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            coordinatesPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _coordinatesPanel = new TableLayoutPanel();
+            _coordinatesPanel.Dock = DockStyle.Fill;
+            _coordinatesPanel.AutoSize = true;
+            _coordinatesPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
 
-            coordinatesPanel.Controls.Add(CreateCoordinateLabel("위도"), 0, 0);
+            _latitudeCoordinateLabel = CreateCoordinateLabel("위도");
             _latitudeText = new TextBox();
             _latitudeText.Dock = DockStyle.Fill;
-            _latitudeText.Margin = new Padding(0, 4, 8, 4);
-            coordinatesPanel.Controls.Add(_latitudeText, 1, 0);
+            _latitudeText.Margin = new Padding(0, 3, 8, 3);
 
-            coordinatesPanel.Controls.Add(CreateCoordinateLabel("경도"), 2, 0);
+            _longitudeCoordinateLabel = CreateCoordinateLabel("경도");
             _longitudeText = new TextBox();
             _longitudeText.Dock = DockStyle.Fill;
-            _longitudeText.Margin = new Padding(0, 4, 8, 4);
-            coordinatesPanel.Controls.Add(_longitudeText, 3, 0);
+            _longitudeText.Margin = new Padding(0, 3, 8, 3);
 
-            coordinatesPanel.Controls.Add(CreateCoordinateLabel("반경(m)"), 4, 0);
+            _radiusCoordinateLabel = CreateCoordinateLabel("반경(m)");
             _radiusInput = new NumericUpDown();
             _radiusInput.Minimum = 10;
             _radiusInput.Maximum = 100000;
             _radiusInput.Value = 200;
             _radiusInput.Dock = DockStyle.Fill;
-            _radiusInput.Margin = new Padding(0, 4, 8, 4);
-            coordinatesPanel.Controls.Add(_radiusInput, 5, 0);
+            _radiusInput.Margin = new Padding(0, 3, 8, 3);
 
-            Button currentLocationButton = CreateButton("현재 좌표 사용");
-            currentLocationButton.Margin = new Padding(0, 2, 0, 2);
-            currentLocationButton.Click += delegate { FillSelectedZoneFromCurrentLocation(); };
-            coordinatesPanel.Controls.Add(currentLocationButton, 7, 0);
+            _currentLocationButton = CreateButton("현재 좌표 사용");
+            _currentLocationButton.Margin = new Padding(0, 2, 0, 2);
+            _currentLocationButton.Click += delegate { FillSelectedZoneFromCurrentLocation(); };
+            ConfigureCoordinateLayout(false);
 
-            AddRowTo(_conditionTable, "좌표", coordinatesPanel);
+            AddRowTo(_conditionTable, "좌표", _coordinatesPanel);
 
             _wifiChoicesPanel = new FlowLayoutPanel();
             _wifiChoicesPanel.Dock = DockStyle.Fill;

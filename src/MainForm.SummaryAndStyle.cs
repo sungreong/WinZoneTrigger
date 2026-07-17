@@ -325,6 +325,10 @@ namespace WinZoneTrigger
             ZoneRule zone = GetSelectedZone();
             if (zone == null)
             {
+                if (_zonePickerButton != null)
+                {
+                    _zonePickerButton.Text = "위치 선택";
+                }
                 _selectedZoneSummaryLabel.Text = "위치를 선택하세요";
                 _selectedZoneMetaLabel.Text = "등록된 위치를 선택하면 감지 조건과 실행 동작이 여기에 요약됩니다.";
                 SetSummaryBadge(_summaryOperatingBadge, "미선택", UiSurface, UiTextMuted);
@@ -334,6 +338,10 @@ namespace WinZoneTrigger
             }
 
             string name = _loadingSelection ? zone.Name : (string.IsNullOrWhiteSpace(_zoneNameText.Text) ? zone.Name : _zoneNameText.Text.Trim());
+            if (_zonePickerButton != null)
+            {
+                _zonePickerButton.Text = "위치: " + ShortenText(name, 16);
+            }
             _selectedZoneSummaryLabel.Text = name;
             _selectedZoneMetaLabel.Text = BuildZoneActionSummary(zone);
 
@@ -628,7 +636,7 @@ namespace WinZoneTrigger
             button.AutoSize = true;
             button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             button.MinimumSize = new Size(74, 30);
-            button.Padding = new Padding(10, 3, 10, 3);
+            button.Padding = new Padding(10, 2, 10, 2);
             button.Margin = new Padding(4);
             button.Cursor = Cursors.Hand;
             StyleButton(button, ResolveButtonTone(text));
@@ -644,7 +652,7 @@ namespace WinZoneTrigger
 
             Size measured = TextRenderer.MeasureText(button.Text ?? "", button.Font ?? Font);
             width = Math.Max(width, measured.Width + 48);
-            height = Math.Max(height, 34);
+            height = Math.Max(height, 30);
             button.AutoSize = false;
             button.Size = new Size(width, height);
             button.MinimumSize = new Size(width, height);

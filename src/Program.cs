@@ -28,6 +28,11 @@ namespace WinZoneTrigger
                 return ScanHelper.Run(args);
             }
 
+            if (HasArgument(args, "--layout-self-test"))
+            {
+                return LayoutSmokeTest.Run();
+            }
+
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
             Application.ThreadException += delegate(object sender, ThreadExceptionEventArgs e)
             {

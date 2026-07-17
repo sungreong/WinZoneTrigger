@@ -51,6 +51,8 @@ namespace WinZoneTrigger
         private TableLayoutPanel _contentGrid;
         private TableLayoutPanel _zoneSidebar;
         private Panel _contentDivider;
+        private Panel _detailHost;
+        private Button _zonePickerButton;
         private TabPage _allZonesTab;
         private TabPage _activeZonesTab;
         private TabPage _inactiveZonesTab;
@@ -87,6 +89,11 @@ namespace WinZoneTrigger
         private TextBox _latitudeText;
         private TextBox _longitudeText;
         private NumericUpDown _radiusInput;
+        private TableLayoutPanel _coordinatesPanel;
+        private Label _latitudeCoordinateLabel;
+        private Label _longitudeCoordinateLabel;
+        private Label _radiusCoordinateLabel;
+        private Button _currentLocationButton;
         private FlowLayoutPanel _wifiChoicesPanel;
         private Label _selectedWifiLabel;
         private CheckBox _requireAllSsidsCheck;
