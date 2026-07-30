@@ -90,6 +90,7 @@ namespace WinZoneTrigger
                 }
                 EnsureBackgroundAutomationRunningAfterSave();
                 UpdateAutomationPauseButton();
+                UpdateTrayAutomationMenu();
                 AppendLog(message);
                 return true;
             }

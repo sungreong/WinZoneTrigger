@@ -55,6 +55,9 @@ namespace WinZoneTrigger
         {
             ContextMenuStrip menu = new ContextMenuStrip();
             menu.Items.Add("열기", null, delegate { ShowMainWindowFromTray(); });
+            _trayAutomationMenuItem = CreateTrayAutomationMenuItem();
+            menu.Items.Add(_trayAutomationMenuItem);
+            menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("설정 폴더", null, delegate { OpenFolderFromTray(ConfigStore.ConfigDirectory); });
             menu.Items.Add("로그 파일", null, delegate { OpenFileFromTray(DiagnosticsLog.ActivityLogPath); });
             menu.Items.Add(new ToolStripSeparator());
@@ -64,7 +67,62 @@ namespace WinZoneTrigger
                 _allowSettingsScreenClose = true;
                 Close();
             });
+            menu.Opening += delegate { UpdateTrayAutomationMenu(); };
+            UpdateTrayAutomationMenu();
             return menu;
+        }
+
+        private ToolStripMenuItem CreateTrayAutomationMenuItem()
+        {
+            ToolStripMenuItem item = new ToolStripMenuItem();
+            item.DropDownOpening += delegate { PopulateTrayAutomationMenu(item); };
+            return item;
+        }
+
+        private void UpdateTrayAutomationMenu()
+        {
+            if (_trayAutomationMenuItem == null || _trayAutomationMenuItem.IsDisposed)
+            {
+                return;
+            }
+
+            bool paused = _config != null && _config.IsAutomationPaused();
+            _trayAutomationMenuItem.Text = paused
+                ? "자동화 정지 중 · " + FormatPauseButtonUntil(_config.AutomationPausedUntilUtc.Value)
+                : "자동화 실행 중 · 임시 정지";
+
+            if (_trayIcon != null)
+            {
+                _trayIcon.Text = paused
+                    ? "위치 자동 실행 설정 (자동화 정지 중)"
+                    : "위치 자동 실행 설정 (자동화 실행 중)";
+            }
+        }
+
+        private void PopulateTrayAutomationMenu(ToolStripMenuItem item)
+        {
+            item.DropDownItems.Clear();
+
+            if (_config != null && _config.IsAutomationPaused())
+            {
+                item.DropDownItems.Add("자동화 바로 다시 시작", null, delegate { ResumeAutomation(); });
+                return;
+            }
+
+            AddTrayPauseMenuItem(item, "30분 동안 정지", TimeSpan.FromMinutes(30));
+            AddTrayPauseMenuItem(item, "1시간 동안 정지", TimeSpan.FromHours(1));
+            AddTrayPauseMenuItem(item, "2시간 동안 정지", TimeSpan.FromHours(2));
+            AddTrayPauseMenuItem(item, "12시간 동안 정지", TimeSpan.FromHours(12));
+            item.DropDownItems.Add(new ToolStripSeparator());
+            item.DropDownItems.Add("오늘 자정까지 정지", null, delegate
+            {
+                PauseAutomationFor(DateTime.Today.AddDays(1) - DateTime.Now);
+            });
+        }
+
+        private void AddTrayPauseMenuItem(ToolStripMenuItem menu, string text, TimeSpan duration)
+        {
+            menu.DropDownItems.Add(text, null, delegate { PauseAutomationFor(duration); });
         }
 
         private static Icon CreateTrayIcon()
@@ -143,6 +201,7 @@ namespace WinZoneTrigger
             ContextMenuStrip menu = _trayMenu;
             _trayIcon = null;
             _trayMenu = null;
+            _trayAutomationMenuItem = null;
 
             try
             {

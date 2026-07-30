@@ -32,6 +32,7 @@ namespace WinZoneTrigger
         private readonly PowerStateMonitor _powerStateMonitor;
         private NotifyIcon _trayIcon;
         private ContextMenuStrip _trayMenu;
+        private ToolStripMenuItem _trayAutomationMenuItem;
         private ContextMenuStrip _automationPauseMenu;
         private AppConfig _config;
         private bool _loadingSelection;

@@ -284,7 +284,7 @@ namespace WinZoneTrigger
             _trayIconCheck.AutoSize = true;
             _trayIconCheck.Margin = new Padding(0, 4, 0, 4);
             trayPanel.Controls.Add(_trayIconCheck, 0, trayPanel.RowCount++);
-            trayPanel.Controls.Add(CreateNoteLine("상태 확인과 설정 열기만 제공합니다. 풍선 알림은 사용하지 않습니다."), 0, trayPanel.RowCount++);
+            trayPanel.Controls.Add(CreateNoteLine("상태 확인, 자동화 임시 정지/재개와 설정 열기를 제공합니다. 풍선 알림은 사용하지 않습니다."), 0, trayPanel.RowCount++);
             content.Controls.Add(trayPanel, 0, content.RowCount++);
 
             TableLayoutPanel diagnosticsPanel = CreateSection("진단");
