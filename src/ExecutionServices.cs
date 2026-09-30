@@ -100,16 +100,7 @@ namespace WinZoneTrigger
 
             try
             {
-                if (string.Equals(zone.AudioAction, "Mute", StringComparison.OrdinalIgnoreCase))
-                {
-                    AudioController.SetMute(true);
-                    log("소리 동작 성공: 음소거");
-                }
-                else if (string.Equals(zone.AudioAction, "Unmute", StringComparison.OrdinalIgnoreCase))
-                {
-                    AudioController.SetMute(false);
-                    log("소리 동작 성공: 음소거 해제");
-                }
+                AudioAutomation.Apply(zone, log);
             }
             catch (Exception ex)
             {

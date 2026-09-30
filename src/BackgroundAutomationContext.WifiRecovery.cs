@@ -14,6 +14,9 @@ namespace WinZoneTrigger
         private readonly Dictionary<string, DateTime> _wifiDue = new Dictionary<string, DateTime>();
         private readonly Dictionary<string, int> _wifiFailures = new Dictionary<string, int>();
         private string _lastWifiStatus = "";
+        private DateTime? _disconnectedSince;
+        private DateTime? _lastRecoveredAt;
+        private bool _wifiHistoryLoaded;
 
         private void PollWifiRecovery()
         {
@@ -21,6 +24,21 @@ namespace WinZoneTrigger
                 || _config.IsAutomationPaused() || DateTime.UtcNow < _nextWifiPollUtc) return;
             List<ZoneRule> zones = _config.Zones.Where(z => z.Enabled && z.WifiRecoveryEnabled).Select(z => z.Clone()).ToList();
             if (zones.Count == 0) return;
+            if (!_wifiHistoryLoaded)
+            {
+                _wifiHistoryLoaded = true;
+                try
+                {
+                    string historyPath = Path.Combine(ConfigStore.ConfigDirectory, "wifi-state.json");
+                    if (File.Exists(historyPath))
+                    {
+                        var previous = new JavaScriptSerializer().Deserialize<WifiRecoveryState>(AtomicFile.Read(historyPath));
+                        _lastRecoveredAt = previous.LastRecoveredAt;
+                        _disconnectedSince = previous.DisconnectedSince;
+                    }
+                }
+                catch { }
+            }
             _wifiRecoveryInProgress = true;
             _nextWifiPollUtc = DateTime.UtcNow.AddSeconds(30);
             Task.Factory.StartNew(delegate
@@ -50,7 +68,7 @@ namespace WinZoneTrigger
                             // Re-read immediately before a side effect; edits/pause invalidate this batch.
                             AppConfig latest = ConfigStore.Load();
                             ZoneRule current = latest.Zones.FirstOrDefault(z => z.Id == selected.Id);
-                            if (latest.IsAutomationPaused() || current == null || !current.Enabled || !current.WifiRecoveryEnabled
+                            if (latest.IsAutomationPaused() || current == null || !current.Enabled || !current.WifiRecoveryEnabled || !ZoneSchedule.Allows(current, DateTime.Now)
                                 || new JavaScriptSerializer().Serialize(current) != new JavaScriptSerializer().Serialize(selected))
                             {
                                 state.Status = "cancelled";
@@ -85,6 +103,16 @@ namespace WinZoneTrigger
                     state.Status = "error";
                     state.Message = "Wi-Fi 확인 실패: " + ex.Message;
                 }
+                NetworkHealth.Read(state);
+                if (state.Status != "error" && string.IsNullOrEmpty(state.ConnectedSsid))
+                    _disconnectedSince = _disconnectedSince ?? DateTime.Now;
+                else if (state.Status != "error")
+                {
+                    if (_disconnectedSince.HasValue || state.Status == "reconnected") _lastRecoveredAt = DateTime.Now;
+                    _disconnectedSince = null;
+                }
+                state.DisconnectedSince = _disconnectedSince;
+                state.LastRecoveredAt = _lastRecoveredAt;
                 return state;
             }).ContinueWith(task => _uiContext.Post(delegate
             {

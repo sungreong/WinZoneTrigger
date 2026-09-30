@@ -42,8 +42,36 @@ with tempfile.TemporaryDirectory(prefix='winzone-tests-') as folder:
     zone['ConnectSsid'] = 'Updated fixture'
     assert call('save', Config=config, Revision=reload['Revision'])['Ok']
     assert (root / 'config.json.bak').read_bytes() == before
+    loaded = call('load')['Result']
+    config = loaded['Config']; zone = config['Zones'][0]
+    zone.update(AudioAction='Volume', VolumePercent=23, RestoreAudioOnExit=True,
+                ScheduleEnabled=True, ScheduleDays=62, ScheduleStartMinute=1320, ScheduleEndMinute=420)
+    config.update(RespectManualChanges=True, ManualOverrideMinutes=90, RestoreBrightnessOnDisable=True)
+    config['BrightnessPeriods'] = [dict(Id='period',Enabled=True,StartMinuteOfDay=540,BrightnessPercent=65,NightLightAction='Keep')]
+    saved = call('save', Config=config, Revision=loaded['Revision'])['Result']
+    assert saved['Config']['Zones'][0]['VolumePercent'] == 23
+    assert saved['Config']['Zones'][0]['ScheduleDays'] == 62
+    assert not call('run-now', ZoneId=zone['Id'])['Ok']  # disabled or paused
+    pause = call('pause', Query='30', Revision=saved['Revision'])['Result']
+    assert pause['Config']['Zones'][0]['RestoreAudioOnExit']
+    assert pause['Config']['BrightnessPeriods'][0]['BrightnessPercent'] == 65
+    assert not call('pause', Query='today', Revision='stale')['Ok']
+    resumed = call('pause', Query='resume', Revision=pause['Revision'])['Result']
+    assert resumed['Config']['AutomationPausedUntilUtc'] is None
+    zone['Enabled'] = True; config['AutomationPausedUntilUtc'] = None
+    saved = call('save', Config=config, Revision=resumed['Revision'])['Result']
+    assert call('run-now', ZoneId=zone['Id'])['Ok']
+    queued = json.loads((root / 'manual-run.json').read_text(encoding='utf-8-sig'))
+    assert queued['ZoneId'] == zone['Id']  # queued only; no actual automation started
+    zone['ScheduleDays'] = 0
+    assert not call('save', Config=config, Revision=saved['Revision'])['Ok']
+    zone['ScheduleDays'] = 62; zone['VolumePercent'] = 101
+    assert not call('save', Config=config, Revision=saved['Revision'])['Ok']
+    zone['VolumePercent'] = 23
+    config['BrightnessPeriods'].append(dict(config['BrightnessPeriods'][0], Id='duplicate'))
+    assert not call('save', Config=config, Revision=saved['Revision'])['Ok']
     (root / 'config.json').write_text('{ broken', encoding='utf-8')
     assert not call('load')['Ok']
     assert (root / 'config.json').read_text() == '{ broken'
     assert not call('unknown')['Ok']
-    print('PASS: isolated config round trip, legacy dates, stale revision, validation, atomic backup, corrupt config, operation allowlist')
+    print('PASS: isolated config round trip, legacy dates, stale revision, validation, atomic backup, corrupt config, operation allowlist, audio/schedule persistence, pause/resume revision, manual run queue')

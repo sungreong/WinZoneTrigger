@@ -9,7 +9,7 @@ namespace WinZoneTrigger
     {
         public static ZoneRule Select(IEnumerable<ZoneRule> zones, IList<WifiNetwork> networks, LocationInfo location)
         {
-            return zones.Where(z => z.Enabled && z.WifiRecoveryEnabled
+            return zones.Where(z => z.Enabled && z.WifiRecoveryEnabled && ZoneSchedule.Allows(z, DateTime.Now)
                     && !string.IsNullOrWhiteSpace(z.ConnectProfile)
                     && !string.IsNullOrWhiteSpace(z.ConnectSsid)
                     && networks.Any(n => n.Ssid == z.ConnectSsid && n.Connectable)
@@ -45,6 +45,10 @@ namespace WinZoneTrigger
     internal sealed class WifiRecoveryState
     {
         public DateTime CheckedAt { get; set; }
+        public string InternetStatus { get; set; }
+        public string InternetMessage { get; set; }
+        public DateTime? DisconnectedSince { get; set; }
+        public DateTime? LastRecoveredAt { get; set; }
         public DateTime? NextCheckAt { get; set; }
         public string ZoneId { get; set; }
         public string TargetSsid { get; set; }

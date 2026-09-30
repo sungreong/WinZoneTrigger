@@ -376,6 +376,10 @@ namespace WinZoneTrigger
     {
         private string _lastAppliedScheduleKey = "";
         private string _lastFailureMessage = "";
+        private Dictionary<string, int> _original;
+        private Dictionary<string, int> _expected;
+        private DateTime _holdUntilUtc;
+
 
         public void Reset()
         {
@@ -387,21 +391,40 @@ namespace WinZoneTrigger
         {
             if (config == null || !config.BrightnessScheduleEnabled)
             {
+                if (_original != null && config != null && config.RestoreBrightnessOnDisable
+                    && BrightnessOwnership.Same(_expected, BrightnessOwnership.Read()))
+                    BrightnessOwnership.Restore(_original);
+                _original = null; _expected = null;
                 _lastAppliedScheduleKey = "";
                 _lastFailureMessage = "";
                 return;
             }
 
+            var current = BrightnessOwnership.Read();
+            if (_expected != null && current.Count > 0 && !BrightnessOwnership.Same(_expected, current))
+            {
+                _original = null; _expected = null;
+                _lastAppliedScheduleKey = "";
+                if (config.RespectManualChanges.GetValueOrDefault(true))
+                {
+                    _holdUntilUtc = DateTime.UtcNow.AddMinutes(config.ManualOverrideMinutes <= 0 ? 60 : config.ManualOverrideMinutes);
+                    DiagnosticsLog.WriteEvent("수동 밝기 변경 감지: " + _holdUntilUtc.ToLocalTime().ToString("HH:mm") + "까지 유지");
+                }
+            }
+            if (config.RespectManualChanges.GetValueOrDefault(true) && DateTime.UtcNow < _holdUntilUtc) return;
             BrightnessScheduleTarget target = BrightnessSchedule.GetTarget(config, DateTime.Now);
+            target.Key += ":" + target.BrightnessPercent + ":" + target.NightLightAction;
             if (string.Equals(_lastAppliedScheduleKey, target.Key, StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
 
+            if (_original == null) _original = current;
             BrightnessApplyResult result = BrightnessController.SetBrightness(target.BrightnessPercent);
             string nightLightMessage = NightLightController.ApplyAction(target.NightLightAction);
             if (result.Succeeded)
             {
+                _expected = BrightnessOwnership.Read();
                 _lastAppliedScheduleKey = target.Key;
                 _lastFailureMessage = "";
                 DiagnosticsLog.WriteEvent((reason ?? "화면 밝기 일정") + " 진입: " + result.Message);

@@ -71,6 +71,10 @@ pub(crate) fn request_sync(app: &AppHandle, request: Value) -> Result<Value, Str
         "apps",
         "pick-file",
         "startup",
+        "run-now",
+        "pause",
+        "network-health",
+        "audio-status",
     ]
     .contains(&operation)
     {
@@ -107,7 +111,7 @@ pub(crate) fn request_sync(app: &AppHandle, request: Value) -> Result<Value, Str
         .map_err(|e| e.to_string())?;
     if response["Ok"] == true {
         // Starting an already running engine is a harmless no-op, protected by its named mutex.
-        if operation == "save" {
+        if operation == "save" || operation == "run-now" || operation == "pause" {
             start_engine(app)?;
         }
         Ok(response["Result"].clone())
@@ -146,7 +150,7 @@ pub fn read_status() -> Value {
         Ok(lines.into_iter().rev().collect::<Vec<_>>().join("\n"))
     })()
     .unwrap_or_default();
-    json!({ "Automation": read_json("automation-state.json"), "Wifi": read_json("wifi-state.json"), "Logs": logs })
+    json!({ "Automation": read_json("automation-state.json"), "Wifi": read_json("wifi-state.json"), "Audio": read_json("audio-state.json"), "Decisions": read_json("decisions.json"), "Logs": logs })
 }
 
 #[tauri::command]

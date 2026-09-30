@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -31,6 +31,9 @@ namespace WinZoneTrigger
         public int AppWatchIntervalValue { get; set; }
         public string AppWatchIntervalUnit { get; set; }
         public bool BrightnessScheduleEnabled { get; set; }
+        public bool? RespectManualChanges { get; set; }
+        public int ManualOverrideMinutes { get; set; }
+        public bool RestoreBrightnessOnDisable { get; set; }
         public DateTime? AutomationPausedUntilUtc { get; set; }
         public int DefaultBrightnessPercent { get; set; }
         public List<BrightnessPeriod> BrightnessPeriods { get; set; }
@@ -53,6 +56,8 @@ namespace WinZoneTrigger
                 AppWatchIntervalValue = 5,
                 AppWatchIntervalUnit = "Minutes",
                 BrightnessScheduleEnabled = false,
+                RespectManualChanges = true,
+                ManualOverrideMinutes = 60,
                 AutomationPausedUntilUtc = null,
                 DefaultBrightnessPercent = 70,
                 BrightnessPeriods = new List<BrightnessPeriod>(),
@@ -65,6 +70,9 @@ namespace WinZoneTrigger
 
         public void Normalize()
         {
+            if (ManualOverrideMinutes <= 0) ManualOverrideMinutes = 60;
+            ManualOverrideMinutes = Math.Min(1440, ManualOverrideMinutes);
+            if (!RespectManualChanges.HasValue) RespectManualChanges = true;
             if (!RunOnceAtStartup.HasValue)
             {
                 RunOnceAtStartup = true;
@@ -347,6 +355,12 @@ namespace WinZoneTrigger
         public int WifiRecoveryIntervalSeconds { get; set; }
         public int WifiPriority { get; set; }
         public string AudioAction { get; set; }
+        public int VolumePercent { get; set; }
+        public bool RestoreAudioOnExit { get; set; }
+        public bool ScheduleEnabled { get; set; }
+        public int ScheduleDays { get; set; }
+        public int ScheduleStartMinute { get; set; }
+        public int ScheduleEndMinute { get; set; }
         public List<string> ChromeUrls { get; set; }
         public List<string> AppLaunches { get; set; }
         public List<string> Commands { get; set; }
@@ -381,6 +395,10 @@ namespace WinZoneTrigger
                 WifiRecoveryIntervalSeconds = 60,
                 WifiPriority = 10,
                 AudioAction = "None",
+                VolumePercent = 20,
+                ScheduleDays = 127,
+                ScheduleStartMinute = 540,
+                ScheduleEndMinute = 1080,
                 ChromeUrls = new List<string>(),
                 AppLaunches = new List<string>(),
                 Commands = new List<string>()
@@ -418,6 +436,12 @@ namespace WinZoneTrigger
                 WifiRecoveryIntervalSeconds = WifiRecoveryIntervalSeconds,
                 WifiPriority = WifiPriority,
                 AudioAction = AudioAction,
+                VolumePercent = VolumePercent,
+                RestoreAudioOnExit = RestoreAudioOnExit,
+                ScheduleEnabled = ScheduleEnabled,
+                ScheduleDays = ScheduleDays,
+                ScheduleStartMinute = ScheduleStartMinute,
+                ScheduleEndMinute = ScheduleEndMinute,
                 ChromeUrls = ChromeUrls == null ? new List<string>() : new List<string>(ChromeUrls),
                 AppLaunches = AppLaunches == null ? new List<string>() : new List<string>(AppLaunches),
                 Commands = Commands == null ? new List<string>() : new List<string>(Commands)
@@ -592,6 +616,11 @@ namespace WinZoneTrigger
                 ConnectWifiEnabled = !string.IsNullOrWhiteSpace(ConnectProfile);
             }
 
+            VolumePercent = Math.Max(0, Math.Min(100, VolumePercent));
+            ScheduleDays &= 127;
+            if (!ScheduleEnabled && ScheduleDays == 0) ScheduleDays = 127;
+            ScheduleStartMinute = Math.Max(0, Math.Min(1439, ScheduleStartMinute));
+            ScheduleEndMinute = Math.Max(0, Math.Min(1439, ScheduleEndMinute));
             if (string.IsNullOrWhiteSpace(AudioAction))
             {
                 AudioAction = "None";

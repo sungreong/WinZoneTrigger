@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -380,7 +380,7 @@ namespace WinZoneTrigger
 
             _audioActionCombo = UiMetrics.CreateComboBox();
             _audioActionCombo.DropDownStyle = ComboBoxStyle.DropDownList;
-            _audioActionCombo.Items.AddRange(new object[] { "안 함", "음소거", "음소거 해제" });
+            _audioActionCombo.Items.AddRange(new object[] { "안 함", "음소거", "음소거 해제", "저장된 볼륨 지정" });
             AddRowTo(_actionTable, "소리", _audioActionCombo);
 
             TableLayoutPanel chromePanel = new TableLayoutPanel();

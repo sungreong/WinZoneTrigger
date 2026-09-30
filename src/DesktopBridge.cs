@@ -45,6 +45,7 @@ namespace WinZoneTrigger
                     // Never silently replace a malformed existing configuration with defaults.
                     AppConfig config = ReadStrict();
                     return new { Config = config, Revision = Revision(), Startup = StartupManager.IsEnabled() };
+                case "pause":
                 case "save":
                     using (Mutex gate = new Mutex(false, @"Local\WinZoneTrigger.ConfigWrite"))
                     {
@@ -54,6 +55,14 @@ namespace WinZoneTrigger
                             try { acquired = gate.WaitOne(10000); } catch (AbandonedMutexException) { acquired = true; }
                             if (!acquired) throw new InvalidOperationException("설정 저장 중입니다. 잠시 후 다시 시도하세요.");
                             if (request.Revision != Revision()) throw new InvalidOperationException("다른 화면에서 설정이 변경되었습니다. 다시 불러온 후 저장하세요.");
+                            if (request.Operation == "pause")
+                            {
+                                request.Config = ReadStrict();
+                                if (request.Query == "resume") request.Config.AutomationPausedUntilUtc = null;
+                                else if (request.Query == "today") request.Config.AutomationPausedUntilUtc = DateTime.Today.AddDays(1).ToUniversalTime();
+                                else if (request.Query == "30" || request.Query == "60") request.Config.AutomationPausedUntilUtc = DateTime.UtcNow.AddMinutes(int.Parse(request.Query));
+                                else throw new InvalidOperationException("지원하지 않는 정지 시간입니다.");
+                            }
                             Validate(request.Config);
                             ConfigStore.Save(request.Config);
                             return new { Config = request.Config, Revision = Revision() };
@@ -63,6 +72,18 @@ namespace WinZoneTrigger
                 case "scan":
                     var networks = WifiLocator.GetVisibleNetworks(true).OrderByDescending(n => n.SignalQuality).ToList();
                     return new { Networks = networks, Location = request.Location ? LocationLocator.GetCurrentLocation() : LocationReadResult.NotRequested() };
+                case "run-now":
+                    AppConfig saved = ReadStrict();
+                    if (saved.IsAutomationPaused()) throw new InvalidOperationException("자동화를 먼저 재개하세요.");
+                    if (!saved.Zones.Any(z => z.Id == request.ZoneId && z.Enabled)) throw new InvalidOperationException("운영 중인 위치를 선택하세요.");
+                    AtomicFile.Write(Path.Combine(ConfigStore.ConfigDirectory, "manual-run.json"), Json.Serialize(new ManualRunRequest { ZoneId = request.ZoneId, RequestedAtUtc = DateTime.UtcNow }));
+                    return "저장된 위치·시간 조건을 확인한 뒤 실행합니다. 활동 기록에서 결과를 확인하세요.";
+                case "audio-status": return AudioController.Read();
+                case "network-health":
+                    var health = new WifiRecoveryState();
+                    health.ConnectedSsid = string.Join(", ", WifiLocator.GetVisibleNetworks(false).Where(n => n.Connected).Select(n => n.Ssid).ToArray());
+                    NetworkHealth.Read(health);
+                    return health;
                 case "new-zone": return ZoneRule.CreateDefault("새 위치");
                 case "apps": return AppLauncher.FindInstalledApps(request.Query ?? "", 200, true);
                 case "pick-file":
@@ -95,8 +116,16 @@ namespace WinZoneTrigger
         {
             if (config == null || config.Zones == null || config.Zones.Any(z => z == null)) throw new InvalidOperationException("위치 설정을 확인하세요.");
             if (config.Zones.Select(z => z.Id).Distinct().Count() != config.Zones.Count) throw new InvalidOperationException("위치 ID가 중복되었습니다.");
+            if (config.ManualOverrideMinutes < 0 || config.ManualOverrideMinutes > 1440) throw new InvalidOperationException("수동 변경 유지 시간은 1~1440분입니다.");
+            if (config.BrightnessPeriods != null && config.BrightnessPeriods.Any(p => p == null || p.StartMinuteOfDay < 0 || p.StartMinuteOfDay > 1439 || p.BrightnessPercent < 1 || p.BrightnessPercent > 100))
+                throw new InvalidOperationException("밝기 일정의 시간과 밝기를 확인하세요.");
+            if (config.BrightnessPeriods != null && config.BrightnessPeriods.Where(p => p.Enabled).GroupBy(p => p.StartMinuteOfDay).Any(g => g.Count() > 1))
+                throw new InvalidOperationException("같은 시작 시간의 밝기 일정이 중복되었습니다.");
             foreach (ZoneRule z in config.Zones)
             {
+                if (z.VolumePercent < 0 || z.VolumePercent > 100) throw new InvalidOperationException("볼륨은 0~100%입니다.");
+                if (z.ScheduleEnabled && (z.ScheduleDays <= 0 || z.ScheduleDays > 127 || z.ScheduleStartMinute < 0 || z.ScheduleStartMinute > 1439 || z.ScheduleEndMinute < 0 || z.ScheduleEndMinute > 1439))
+                    throw new InvalidOperationException(z.Name + ": 실행할 요일과 시간을 확인하세요.");
                 if (string.IsNullOrWhiteSpace(z.Name)) throw new InvalidOperationException("위치 이름을 입력하세요.");
                 if (z.UseCoordinates && (double.IsNaN(z.Latitude) || double.IsNaN(z.Longitude) || Math.Abs(z.Latitude) > 90 || Math.Abs(z.Longitude) > 180 || z.RadiusMeters <= 0))
                     throw new InvalidOperationException(z.Name + ": 좌표와 반경을 확인하세요.");
@@ -113,6 +142,7 @@ namespace WinZoneTrigger
         private sealed class BridgeRequest
         {
             public string Operation { get; set; }
+            public string ZoneId { get; set; }
             public AppConfig Config { get; set; }
             public string Revision { get; set; }
             public string Query { get; set; }

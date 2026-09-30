@@ -743,11 +743,13 @@ namespace WinZoneTrigger
         {
             return string.Equals(value, "None", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(value, "Mute", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(value, "Unmute", StringComparison.OrdinalIgnoreCase);
+                || string.Equals(value, "Unmute", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "Volume", StringComparison.OrdinalIgnoreCase);
         }
 
         private void SetAudioActionSelection(string value)
         {
+            if (value == "Volume") { _audioActionCombo.SelectedItem = "저장된 볼륨 지정"; return; }
             if (string.Equals(value, "Mute", StringComparison.OrdinalIgnoreCase) || string.Equals(value, "음소거", StringComparison.OrdinalIgnoreCase))
             {
                 _audioActionCombo.SelectedItem = "음소거";
@@ -765,6 +767,7 @@ namespace WinZoneTrigger
         private string ReadAudioActionSelection()
         {
             string selected = Convert.ToString(_audioActionCombo.SelectedItem);
+            if (selected == "저장된 볼륨 지정") return "Volume";
             if (string.Equals(selected, "음소거", StringComparison.OrdinalIgnoreCase))
             {
                 return "Mute";

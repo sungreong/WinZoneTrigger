@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -18,42 +18,38 @@ namespace WinZoneTrigger
 {
     internal static class AudioController
     {
-        public static void SetMute(bool mute)
-        {
-            object enumeratorObject = null;
-            IMMDevice device = null;
-            object volumeObject = null;
+        public static void SetMute(bool mute) { Access(null, mute, null); }
+        public static AudioSnapshot Read() { return Access(null, null, null); }
+        public static void Set(AudioSnapshot state) { Access(state.Volume, state.Muted, state.DeviceId); }
+        public static void SetVolume(int percent) { Access(Math.Max(0, Math.Min(100, percent)) / 100f, false, null); }
 
+        private static AudioSnapshot Access(float? level, bool? mute, string expectedDevice)
+        {
+            object enumeratorObject = null, volumeObject = null;
+            IMMDevice device = null;
             try
             {
                 enumeratorObject = new MMDeviceEnumerator();
-                IMMDeviceEnumerator enumerator = (IMMDeviceEnumerator)enumeratorObject;
-                int hr = enumerator.GetDefaultAudioEndpoint(EDataFlow.eRender, ERole.eMultimedia, out device);
-                Marshal.ThrowExceptionForHR(hr);
-
-                Guid endpointVolumeGuid = typeof(IAudioEndpointVolume).GUID;
-                hr = device.Activate(ref endpointVolumeGuid, 23, IntPtr.Zero, out volumeObject);
-                Marshal.ThrowExceptionForHR(hr);
-
+                Marshal.ThrowExceptionForHR(((IMMDeviceEnumerator)enumeratorObject).GetDefaultAudioEndpoint(EDataFlow.eRender, ERole.eMultimedia, out device));
+                string id;
+                Marshal.ThrowExceptionForHR(device.GetId(out id));
+                if (expectedDevice != null && id != expectedDevice) throw new InvalidOperationException("오디오 장치가 바뀌어 복원을 건너뜁니다.");
+                Guid guid = typeof(IAudioEndpointVolume).GUID;
+                Marshal.ThrowExceptionForHR(device.Activate(ref guid, 23, IntPtr.Zero, out volumeObject));
                 IAudioEndpointVolume volume = (IAudioEndpointVolume)volumeObject;
-                volume.SetMute(mute, Guid.Empty);
+                Guid context = Guid.Empty;
+                if (level.HasValue) Marshal.ThrowExceptionForHR(volume.SetMasterVolumeLevelScalar(level.Value, ref context));
+                if (mute.HasValue) Marshal.ThrowExceptionForHR(volume.SetMute(mute.Value, ref context));
+                float current; bool muted;
+                Marshal.ThrowExceptionForHR(volume.GetMasterVolumeLevelScalar(out current));
+                Marshal.ThrowExceptionForHR(volume.GetMute(out muted));
+                return new AudioSnapshot { DeviceId = id, Volume = current, Muted = muted };
             }
             finally
             {
-                if (volumeObject != null)
-                {
-                    Marshal.ReleaseComObject(volumeObject);
-                }
-
-                if (device != null)
-                {
-                    Marshal.ReleaseComObject(device);
-                }
-
-                if (enumeratorObject != null)
-                {
-                    Marshal.ReleaseComObject(enumeratorObject);
-                }
+                if (volumeObject != null) Marshal.ReleaseComObject(volumeObject);
+                if (device != null) Marshal.ReleaseComObject(device);
+                if (enumeratorObject != null) Marshal.ReleaseComObject(enumeratorObject);
             }
         }
 
@@ -82,10 +78,15 @@ namespace WinZoneTrigger
         [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
         private interface IMMDeviceEnumerator
         {
+            [PreserveSig]
             int EnumAudioEndpoints(EDataFlow dataFlow, int dwStateMask, out IntPtr ppDevices);
+            [PreserveSig]
             int GetDefaultAudioEndpoint(EDataFlow dataFlow, ERole role, out IMMDevice ppEndpoint);
+            [PreserveSig]
             int GetDevice([MarshalAs(UnmanagedType.LPWStr)] string pwstrId, out IMMDevice ppDevice);
+            [PreserveSig]
             int RegisterEndpointNotificationCallback(IntPtr pClient);
+            [PreserveSig]
             int UnregisterEndpointNotificationCallback(IntPtr pClient);
         }
 
@@ -94,9 +95,13 @@ namespace WinZoneTrigger
         [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
         private interface IMMDevice
         {
+            [PreserveSig]
             int Activate(ref Guid iid, int dwClsCtx, IntPtr pActivationParams, [MarshalAs(UnmanagedType.IUnknown)] out object ppInterface);
+            [PreserveSig]
             int OpenPropertyStore(int stgmAccess, out IntPtr ppProperties);
+            [PreserveSig]
             int GetId([MarshalAs(UnmanagedType.LPWStr)] out string ppstrId);
+            [PreserveSig]
             int GetState(out int pdwState);
         }
 
@@ -105,23 +110,41 @@ namespace WinZoneTrigger
         [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
         private interface IAudioEndpointVolume
         {
+            [PreserveSig]
             int RegisterControlChangeNotify(IntPtr pNotify);
+            [PreserveSig]
             int UnregisterControlChangeNotify(IntPtr pNotify);
+            [PreserveSig]
             int GetChannelCount(out uint pnChannelCount);
-            int SetMasterVolumeLevel(float fLevelDB, Guid pguidEventContext);
-            int SetMasterVolumeLevelScalar(float fLevel, Guid pguidEventContext);
+            [PreserveSig]
+            int SetMasterVolumeLevel(float fLevelDB, ref Guid pguidEventContext);
+            [PreserveSig]
+            int SetMasterVolumeLevelScalar(float fLevel, ref Guid pguidEventContext);
+            [PreserveSig]
             int GetMasterVolumeLevel(out float pfLevelDB);
+            [PreserveSig]
             int GetMasterVolumeLevelScalar(out float pfLevel);
-            int SetChannelVolumeLevel(uint nChannel, float fLevelDB, Guid pguidEventContext);
-            int SetChannelVolumeLevelScalar(uint nChannel, float fLevel, Guid pguidEventContext);
+            [PreserveSig]
+            int SetChannelVolumeLevel(uint nChannel, float fLevelDB, ref Guid pguidEventContext);
+            [PreserveSig]
+            int SetChannelVolumeLevelScalar(uint nChannel, float fLevel, ref Guid pguidEventContext);
+            [PreserveSig]
             int GetChannelVolumeLevel(uint nChannel, out float pfLevelDB);
+            [PreserveSig]
             int GetChannelVolumeLevelScalar(uint nChannel, out float pfLevel);
-            int SetMute([MarshalAs(UnmanagedType.Bool)] bool bMute, Guid pguidEventContext);
-            int GetMute(out bool pbMute);
+            [PreserveSig]
+            int SetMute([MarshalAs(UnmanagedType.Bool)] bool bMute, ref Guid pguidEventContext);
+            [PreserveSig]
+            int GetMute([MarshalAs(UnmanagedType.Bool)] out bool pbMute);
+            [PreserveSig]
             int GetVolumeStepInfo(out uint pnStep, out uint pnStepCount);
-            int VolumeStepUp(Guid pguidEventContext);
-            int VolumeStepDown(Guid pguidEventContext);
+            [PreserveSig]
+            int VolumeStepUp(ref Guid pguidEventContext);
+            [PreserveSig]
+            int VolumeStepDown(ref Guid pguidEventContext);
+            [PreserveSig]
             int QueryHardwareSupport(out uint pdwHardwareSupportMask);
+            [PreserveSig]
             int GetVolumeRange(out float pflVolumeMindB, out float pflVolumeMaxdB, out float pflVolumeIncrementdB);
         }
     }

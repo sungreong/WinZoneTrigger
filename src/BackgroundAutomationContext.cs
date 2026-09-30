@@ -162,6 +162,8 @@ namespace WinZoneTrigger
         {
             bool wasPaused = _automationWasPaused;
             ReloadConfigIfChanged();
+            PollQuickControls();
+            ObserveAudioState();
             PollWifiRecovery();
             if (DateTime.UtcNow - _lastHeartbeatUtc > TimeSpan.FromSeconds(60))
             {
@@ -197,11 +199,7 @@ namespace WinZoneTrigger
 
         private void ApplyBrightnessSchedule(string reason)
         {
-            if (_config != null && _config.IsAutomationPaused())
-            {
-                return;
-            }
-
+            if (_config != null && _config.IsAutomationPaused()) return;
             _brightnessScheduleRunner.Apply(_config, reason);
         }
 
@@ -356,6 +354,7 @@ namespace WinZoneTrigger
                 _scanInProgress = false;
                 if (task.IsFaulted)
                 {
+                    _manualZoneId = null;
                     string message = task.Exception == null ? "알 수 없는 위치 확인 오류" : task.Exception.GetBaseException().Message;
                     DiagnosticsLog.WriteEvent("백그라운드 위치 확인 실패: " + message);
                     UpdateAutomationEvent("백그라운드 위치 확인 실패: " + message, null, null);
@@ -465,6 +464,9 @@ namespace WinZoneTrigger
             List<string> activeZoneNames = new List<string>();
             bool preserveActiveZones = ScanReliability.HasTransientDetectionError(snapshot);
             List<ZoneRule> zonesToTrigger = new List<ZoneRule>();
+            var decisions = new List<ZoneDecision>();
+            string manualZone = _manualZoneId;
+            _manualZoneId = null;
             bool startupWifiMatchedZoneExists = startupOnly && HasEligibleStartupWifiMatch(visibleSsids, currentLocation);
 
             DiagnosticsLog.WriteThrottled("scan", "백그라운드 scan 요약: Wi-Fi="
@@ -476,13 +478,22 @@ namespace WinZoneTrigger
             {
                 zone.Normalize();
                 bool wasInside = IsZoneActive(zone);
+                if (manualZone != null && manualZone != zone.Id)
+                {
+                    if (wasInside) { activeZoneIds.Add(zone.Id); activeZoneNames.Add(zone.Name); }
+                    decisions.Add(new ZoneDecision { ZoneId = zone.Id, Name = zone.Name, CheckedAt = DateTime.Now,
+                        Message = "지금 실행에서 선택하지 않은 위치 · 기존 감시 상태 유지" });
+                    continue;
+                }
                 ZoneMatchResult match = AnalyzeZoneMatch(zone, visibleSsids, currentLocation, startupOnly);
-                bool actualNear = zone.Enabled && match.Matches;
-                bool near = zone.Enabled && (match.Matches || (preserveActiveZones && wasInside));
+                bool timeAllowed = ZoneSchedule.Allows(zone, DateTime.Now);
+                bool actualNear = zone.Enabled && timeAllowed && match.Matches;
+                bool near = zone.Enabled && timeAllowed && (match.Matches || (preserveActiveZones && wasInside));
+                near = StabilizeExit(zone.Id, near, wasInside, !timeAllowed || !zone.Enabled);
                 bool eligible = startupOnly
                     ? zone.RunOnceAtStartup.GetValueOrDefault(true)
                     : zone.MonitoringEnabled.GetValueOrDefault(false);
-                string reason = match.Reason;
+                string reason = timeAllowed ? match.Reason : "요일·시간 조건 밖";
 
                 if (startupOnly && startupWifiMatchedZoneExists && match.StartupWifiConnectionKickoff && !match.WifiMatch)
                 {
@@ -493,6 +504,12 @@ namespace WinZoneTrigger
                 bool shouldTrigger = eligible && (startupOnly
                     ? actualNear && !IsStartupZoneCompleted(zone)
                     : near && !wasInside);
+
+                if (manualZone != null) shouldTrigger = manualZone == zone.Id && actualNear;
+                decisions.Add(new ZoneDecision { ZoneId = zone.Id, Name = zone.Name, CheckedAt = DateTime.Now,
+                    Message = !zone.Enabled ? "위치 비활성" : !timeAllowed ? "요일·시간 조건 밖 · 실행 대기"
+                    : shouldTrigger ? reason + " → 실행 요청" : !near ? reason + " → 대기"
+                    : !eligible ? "위치 감지됨 · 진입 동작 지속 감시 꺼짐" : "이미 실행한 위치 · 중복 실행 건너뜀" });
 
                 DiagnosticsLog.WriteThrottled("zone:" + zone.Id + ":" + near + ":" + eligible, "백그라운드 위치 판정: " + zone.Name
                     + " / enabled=" + zone.Enabled
@@ -533,6 +550,8 @@ namespace WinZoneTrigger
                 }
             }
 
+            SaveDecisions(decisions);
+            ReconcileAudio(activeZoneIds);
             LogConflictingWifiActions(zonesToTrigger);
             foreach (ZoneRule zone in zonesToTrigger)
             {
@@ -568,7 +587,7 @@ namespace WinZoneTrigger
             foreach (ZoneRule zone in _config.Zones)
             {
                 zone.Normalize();
-                if (!zone.Enabled || !zone.RunOnceAtStartup.GetValueOrDefault(true))
+                if (!zone.Enabled || !ZoneSchedule.Allows(zone, DateTime.Now) || !zone.RunOnceAtStartup.GetValueOrDefault(true))
                 {
                     continue;
                 }
@@ -610,7 +629,10 @@ namespace WinZoneTrigger
                             return;
                         }
 
-                        ZoneExecutionResult result = ZoneExecutor.Execute(zone, DiagnosticsLog.WriteEvent);
+                        AppConfig latest = ConfigStore.Load();
+                        ZoneRule current = latest.Zones.FirstOrDefault(z => z.Id == zone.Id);
+                        if (current == null || !current.Enabled || !ZoneSchedule.Allows(current, DateTime.Now)) return;
+                        ZoneExecutionResult result = ZoneExecutor.Execute(current, DiagnosticsLog.WriteEvent);
                         bool completed = result != null && result.Completed;
                         UpdateAutomationEvent(
                             (completed ? "동작 실행 완료: " : "동작 실행 미완료: ") + zone.Name,
@@ -716,7 +738,7 @@ namespace WinZoneTrigger
 
             DateTime now = DateTime.UtcNow;
             List<Tuple<ZoneRule, AppWatchItem>> dueTargets = new List<Tuple<ZoneRule, AppWatchItem>>();
-            foreach (ZoneRule zone in _config.Zones.Where(z => z.Enabled && IsZoneActive(z)))
+            foreach (ZoneRule zone in _config.Zones.Where(z => z.Enabled && IsZoneActive(z) && ZoneSchedule.Allows(z, DateTime.Now)))
             {
                 foreach (AppWatchItem item in zone.GetEnabledAppWatchItems())
                 {
@@ -751,6 +773,11 @@ namespace WinZoneTrigger
                         break;
                     }
 
+                    var saved = ConfigStore.Load();
+                    var currentZone = saved.Zones.FirstOrDefault(z => z.Id == target.Item1.Id);
+                    if (saved.IsAutomationPaused() || currentZone == null || !currentZone.Enabled
+                        || !ZoneSchedule.Allows(currentZone, DateTime.Now)
+                        || !currentZone.GetEnabledAppWatchItems().Any(i => i.Id == target.Item2.Id)) continue;
                     AppWatchItem item = target.Item2;
                     string processName = AppWatchdog.NormalizeProcessName(item.ProcessName);
                     if (string.IsNullOrWhiteSpace(processName) || string.IsNullOrWhiteSpace(item.LaunchTarget))
@@ -818,7 +845,7 @@ namespace WinZoneTrigger
 
         private bool HasZoneConditionScanZones()
         {
-            return _config.Zones.Any(z => z.Enabled && (z.MonitoringEnabled.GetValueOrDefault(false) || z.GetEnabledAppWatchItems().Any()));
+            return _config.Zones.Any(z => z.Enabled && (z.MonitoringEnabled.GetValueOrDefault(false) || z.RestoreAudioOnExit || z.ScheduleEnabled || z.GetEnabledAppWatchItems().Any()));
         }
 
         private bool HasAppWatchZones()
@@ -865,6 +892,7 @@ namespace WinZoneTrigger
             if (mode == PowerModes.Resume)
             {
                 _powerResumeDetected = true;
+                _uiContext.Post(delegate { _nextWifiPollUtc = DateTime.MinValue; }, null);
                 UpdateAutomationEvent("절전 복귀 감지: 다음 앱 감시는 복귀 후 확인으로 기록됩니다.", null, null);
             }
         }
@@ -878,73 +906,6 @@ namespace WinZoneTrigger
 
             _powerResumeDetected = false;
             return true;
-        }
-
-        private int GetShortestConditionScanIntervalSeconds()
-        {
-            List<int> intervals = _config.Zones
-                .Where(z => z.Enabled && (z.MonitoringEnabled.GetValueOrDefault(false) || z.GetEnabledAppWatchItems().Any()))
-                .Select(z => z.ScanIntervalSeconds < 5 ? 30 : z.ScanIntervalSeconds)
-                .ToList();
-            return intervals.Count == 0 ? 30 : intervals.Min();
-        }
-
-        private int GetShortestAppWatchIntervalMilliseconds()
-        {
-            List<int> intervals = _config.Zones
-                .Where(z => z.Enabled)
-                .SelectMany(z => z.GetEnabledAppWatchItems())
-                .Select(item => AppWatchTiming.GetGuardIntervalMilliseconds(item.IntervalValue, item.IntervalUnit))
-                .ToList();
-            int shortest = intervals.Count == 0 ? AppWatchTiming.DefaultGuardIntervalMilliseconds : intervals.Min();
-            return Math.Min(shortest, AppWatchTiming.GuardPollIntervalMilliseconds);
-        }
-
-        private static string QuoteCommandArgument(string value)
-        {
-            return "\"" + (value ?? "").Replace("\"", "\\\"") + "\"";
-        }
-
-        private bool ReloadConfigIfChanged()
-        {
-            try
-            {
-                DateTime lastWriteUtc = File.Exists(ConfigStore.ConfigPath)
-                    ? File.GetLastWriteTimeUtc(ConfigStore.ConfigPath)
-                    : DateTime.MinValue;
-                if (lastWriteUtc <= _configLastWriteUtc)
-                {
-                    return false;
-                }
-
-                LoadConfigFromDisk("변경 감지", true);
-                _brightnessScheduleRunner.Reset();
-                ResetTimers();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                DiagnosticsLog.Write("백그라운드 설정 변경 확인 실패", ex);
-                return false;
-            }
-        }
-
-        private void LoadConfigFromDisk(string reason, bool resetState)
-        {
-            _config = ConfigStore.Load();
-            _config.Normalize();
-            _configLastWriteUtc = File.Exists(ConfigStore.ConfigPath)
-                ? File.GetLastWriteTimeUtc(ConfigStore.ConfigPath)
-                : DateTime.UtcNow;
-
-            if (resetState)
-            {
-                // Keep occupancy across unrelated edits so saving never replays entry actions.
-                foreach (string id in _insideZones.Keys.Where(id => !_config.Zones.Any(z => z.Id == id && z.Enabled)).ToList())
-                    _insideZones.Remove(id);
-            }
-
-            DiagnosticsLog.WriteEvent("백그라운드 설정 로드: " + reason + " / zones=" + _config.Zones.Count);
         }
 
         private sealed class ZoneMatchResult

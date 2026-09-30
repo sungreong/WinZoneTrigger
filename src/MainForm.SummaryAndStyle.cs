@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -419,7 +419,7 @@ namespace WinZoneTrigger
             }
             if (!string.IsNullOrWhiteSpace(zone.AudioAction) && !string.Equals(zone.AudioAction, "None", StringComparison.OrdinalIgnoreCase))
             {
-                actions.Add(string.Equals(zone.AudioAction, "Mute", StringComparison.OrdinalIgnoreCase) ? "음소거" : "음소거 해제");
+                actions.Add(zone.AudioAction == "Volume" ? "볼륨 " + zone.VolumePercent + "%" : string.Equals(zone.AudioAction, "Mute", StringComparison.OrdinalIgnoreCase) ? "음소거" : "음소거 해제");
             }
             if (zone.ChromeUrls != null && zone.ChromeUrls.Any(u => !string.IsNullOrWhiteSpace(u)))
             {
