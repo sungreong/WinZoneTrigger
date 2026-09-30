@@ -219,6 +219,8 @@ $culture = [Globalization.CultureInfo]::InvariantCulture
                     Thread.Sleep(1300);
                 }
 
+                int readableInterfaces = 0;
+                int firstNetworkError = 0;
                 foreach (NativeMethods.WLAN_INTERFACE_INFO wlanInterface in interfaces)
                 {
                     IntPtr networksPtr = IntPtr.Zero;
@@ -228,8 +230,10 @@ $culture = [Globalization.CultureInfo]::InvariantCulture
                         result = NativeMethods.WlanGetAvailableNetworkList(handle, ref interfaceGuid, 0, IntPtr.Zero, out networksPtr);
                         if (result != 0)
                         {
-                            throw new Win32Exception(result);
+                            if (firstNetworkError == 0) firstNetworkError = result;
+                            continue;
                         }
+                        readableInterfaces++;
 
                         int networkCount = Marshal.ReadInt32(networksPtr, 0);
                         long networkIterator = networksPtr.ToInt64() + 8;
@@ -273,6 +277,7 @@ $culture = [Globalization.CultureInfo]::InvariantCulture
                         }
                     }
                 }
+                if (readableInterfaces == 0 && firstNetworkError != 0) throw new Win32Exception(firstNetworkError);
             }
             finally
             {

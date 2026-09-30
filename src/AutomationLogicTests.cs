@@ -12,6 +12,7 @@ namespace WinZoneTrigger
             try
             {
                 AutomationFeatureTests.Run();
+                WifiRadioRecoveryTests.Run();
                 ZoneRule home = ZoneRule.CreateDefault("Home");
                 home.Id = "home"; home.WifiRecoveryEnabled = true; home.WifiPriority = 10;
                 home.ConnectSsid = "Home"; home.ConnectProfile = "Saved home";
@@ -57,7 +58,7 @@ namespace WinZoneTrigger
                     Check(AtomicFile.Read(path) == "complete:199", "all atomic writes completed");
                 }
                 finally { if (writer != null) writer.Wait(); if (Directory.Exists(directory)) Directory.Delete(directory, true); }
-                File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logic-test-result.txt"), "PASS: schedule/audio ownership/brightness regression checks + 13 automation policy checks + 200 concurrent writes / 500 reads");
+                File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logic-test-result.txt"), "PASS: Wi-Fi radio recovery + schedule/audio ownership/brightness regression checks + 13 automation policy checks + 200 concurrent writes / 500 reads");
                 return 0;
             }
             catch (Exception ex)

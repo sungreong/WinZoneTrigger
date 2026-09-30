@@ -21,7 +21,7 @@ export function wifiView(z, networks) {
  </section><section class="panel">${header('이곳에서 연결할 Wi-Fi','저장된 네트워크 중 하나를 선택하세요. 비밀번호는 Windows가 관리합니다.','<button class="button" data-action="scan">↻ 주변 Wi-Fi 찾기</button>')}
  ${networksView(z,networks,'target')}
  <div class="section-label">선택한 연결 대상</div><div class="field-grid">${field('Wi-Fi 이름 (SSID)','ConnectSsid',z.ConnectSsid||'')}${field('Windows 프로필 이름','ConnectProfile',z.ConnectProfile||'',{help:'보통 Wi-Fi 이름과 같습니다. 저장된 프로필 이름을 입력하세요.'})}</div>
- <div class="note">자동 복구는 이 위치가 감지되고 연결 대상이 주변에 보일 때만 실행됩니다. 이미 연결되어 있으면 연결 명령을 보내지 않습니다. 인터넷 장애는 아래 Windows 진단으로 구분합니다. 인터넷 연결 실패만으로 Wi-Fi를 반복 재연결하지 않습니다.</div>
+ <div class="note">자동 복구가 켜져 있으면 꺼진 Wi-Fi 전원도 다시 켭니다. 전원을 켠 뒤 위치와 연결 대상을 새로 검색하고, 이 위치가 감지될 때만 연결합니다. 이미 연결되어 있으면 연결 명령을 보내지 않습니다. Wi-Fi를 계속 꺼두려면 자동 복구를 끄거나 자동화를 잠시 쉬세요. 물리 스위치·사용 중지된 어댑터는 Windows에서 확인해야 합니다. 인터넷 장애만으로 반복 재연결하지 않습니다.</div>
  </section><section class="panel">${header('연결 상태 진단','Windows의 PC 전체 인터넷 판정입니다. VPN·유선 연결이 있으면 Wi-Fi 자체 상태와 다를 수 있습니다.','<button class="button" data-action="diagnose">상태 확인</button>')}<div id="wifi-health"></div></section><section class="panel">${row('위치에 들어올 때도 연결','앱·링크 실행 전에 선택한 Wi-Fi 연결을 확인합니다.',toggle('ConnectWifiEnabled',z.ConnectWifiEnabled,'진입 시 연결'))}</section>`;
 }
 

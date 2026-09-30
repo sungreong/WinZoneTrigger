@@ -503,6 +503,7 @@ namespace WinZoneTrigger
                     Enabled = zone.Enabled, TimeAllowed = timeAllowed,
                     LocationMatches = match.Matches ? true : preserveActiveZones ? (bool?)null : false,
                     Message = !zone.Enabled ? "위치 비활성" : !timeAllowed ? "요일·시간 조건 밖 · 실행 대기"
+                    : !match.Matches && preserveActiveZones ? "감지 실패 · 현재 위치 확인 대기 (이전 진입 상태만 유지)"
                     : shouldTrigger ? reason + " → 실행 요청" : !near ? reason + " → 대기"
                     : !eligible ? "위치 감지됨 · 진입 동작 지속 감시 꺼짐" : "이미 실행한 위치 · 중복 실행 건너뜀" });
 

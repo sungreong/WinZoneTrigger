@@ -1,4 +1,4 @@
-import {escapeHtml as e, time, asDate, paused, lines, applyNetwork, zoneAvailability} from './model.mjs';
+import {escapeHtml as e, time, asDate, paused, lines, applyNetwork, zoneAvailability, wifiPresentation} from './model.mjs';
 import {wifiView,conditionsView,actionsView,watchView,settingsView,logsView,toggle} from './views.js';
 import {demoConfig,demoNetworks,demoStatus} from './demo.mjs';
 
@@ -68,7 +68,9 @@ function updateStatus(){
  $('engine-status').className=`status-pill ${!demo&&(stale||paused(config))?'warning':''}`;
  const wifiZone=config?.Zones.find(z=>z.Id===w.ZoneId);
  const wifiMessage=wifiZone&&wifiZone.Id!==selected?`${wifiZone.Name}의 최근 복구: ${w.Message||''}`:w.Message;
- const connected=w.ConnectedSsid||networks.filter(n=>n.Connected).map(n=>n.Ssid).join(', ');
+ const wifiDisplay=wifiPresentation(w,networks);
+ const connected=wifiDisplay.title;
+ $('connection').className=`connection ${wifiDisplay.tone}`;
  $('connection').innerHTML=`<div class="signal-icon" aria-hidden="true"><i></i><i></i><i></i></div><div><div class="small-label">PC의 Wi-Fi 연결</div><strong>${e(connected||'아직 연결을 확인하지 않았어요')}</strong><p>${e(wifiMessage||'주변 Wi-Fi를 찾아 원하는 연결을 선택해보세요.')}</p></div><div class="connection-meta"><div>최근 확인 <b>${time(w.CheckedAt)}</b></div><div>다음 확인 <b>${w.NextCheckAt?time(w.NextCheckAt):'설정한 주기마다'}</b></div></div>`;
 }
 async function refreshStatus(){status=demo?demoStatus():await window.__TAURI__.core.invoke('read_status');if(renderedPause!==!!paused(config)){render();return;}updateStatus();if(tab==='logs')$('content').innerHTML=logsView(status);}

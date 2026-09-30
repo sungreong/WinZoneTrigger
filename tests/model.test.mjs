@@ -1,9 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {escapeHtml,lines,asDate,applyNetwork,paused,zoneAvailability} from '../desktop/model.mjs';
+import {escapeHtml,lines,asDate,applyNetwork,paused,zoneAvailability,wifiPresentation} from '../desktop/model.mjs';
 test('untrusted SSID and log text is escaped',()=>assert.equal(escapeHtml('<img onerror="x">&'), '&lt;img onerror=&quot;x&quot;&gt;&amp;'));
 test('legacy .NET date format remains readable',()=>assert.equal(asDate('/Date(1700000000000)/').getTime(),1700000000000));
 test('empty dates remain unknown',()=>assert.equal(asDate(null),null));
+test('radio off recovery has a warning title',()=>assert.deepEqual(wifiPresentation({Status:'radio-starting'}),{title:'Wi-Fi 전원을 켜는 중',tone:'warning'}));
+test('radio errors never display cached connected SSID',()=>assert.equal(wifiPresentation({Status:'radio-error'},[{Ssid:'Old',Connected:true}]).tone,'warning'));
+test('fresh disconnected result overrides old picker',()=>assert.equal(wifiPresentation({CheckedAt:'/Date(1700000000000)/',ConnectedSsid:''},[{Ssid:'Old',Connected:true}]).title,'연결된 Wi-Fi 없음'));
+test('confirmed connected Wi-Fi remains green',()=>assert.deepEqual(wifiPresentation({ConnectedSsid:'Home'}),{title:'Home',tone:''}));
 test('Windows multiline actions are preserved',()=>assert.deepEqual(lines('a\r\nb\n\n'),['a','b']));
 test('selecting a target preserves detection conditions',()=>{const z={NearbySsids:['beacon']};applyNetwork(z,{Ssid:'Home',ProfileName:'Saved Home'});assert.equal(z.ConnectProfile,'Saved Home');assert.deepEqual(z.NearbySsids,['beacon']);});
 test('unsaved networks cannot be selected',()=>assert.throws(()=>applyNetwork({}, {Ssid:'Guest',ProfileName:''})));

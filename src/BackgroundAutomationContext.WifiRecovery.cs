@@ -46,54 +46,66 @@ namespace WinZoneTrigger
                 WifiRecoveryState state = new WifiRecoveryState { CheckedAt = DateTime.Now, Status = "waiting", Message = "감지되는 위치와 연결 대상을 기다립니다." };
                 try
                 {
-                    ScanSnapshot scan = CreateScanSnapshot(true, zones.Any(z => z.UseCoordinates));
-                    if (!string.IsNullOrWhiteSpace(scan.WifiError)) throw new InvalidOperationException(scan.WifiError);
-                    List<WifiNetwork> networks = scan.Networks ?? new List<WifiNetwork>();
-                    state.ConnectedSsid = string.Join(", ", networks.Where(n => n.Connected).Select(n => n.Ssid).ToArray());
-                    ZoneRule selected = WifiRecoveryPolicy.Select(zones, networks, scan.LocationResult == null ? null : scan.LocationResult.Location);
-                    if (selected != null)
+                    WifiRadioResult radio;
+                    using (var adapter = new NativeWifiRadio())
+                        radio = WifiRadioRecovery.Prepare(adapter, () => WifiRadioRecovery.Allowed(ConfigStore.Load()));
+                    if (!radio.Ready)
                     {
-                        string scheduleKey = new JavaScriptSerializer().Serialize(selected);
-                        state.ZoneId = selected.Id;
-                        state.TargetSsid = selected.ConnectSsid;
-                        DateTime due;
-                        if (_wifiDue.TryGetValue(scheduleKey, out due) && due > DateTime.UtcNow)
+                        state.Status = radio.Status;
+                        state.Message = radio.Message;
+                        state.NextCheckAt = DateTime.Now.AddSeconds(30);
+                    }
+                    else
+                    {
+                        ScanSnapshot scan = CreateScanSnapshot(true, zones.Any(z => z.UseCoordinates));
+                        if (!string.IsNullOrWhiteSpace(scan.WifiError)) throw new InvalidOperationException(scan.WifiError);
+                        List<WifiNetwork> networks = scan.Networks ?? new List<WifiNetwork>();
+                        state.ConnectedSsid = string.Join(", ", networks.Where(n => n.Connected).Select(n => n.Ssid).ToArray());
+                        ZoneRule selected = WifiRecoveryPolicy.Select(zones, networks, scan.LocationResult == null ? null : scan.LocationResult.Location);
+                        if (selected != null)
                         {
-                            state.Status = "scheduled";
-                            state.Message = "다음 확인 주기를 기다립니다.";
-                            state.NextCheckAt = due.ToLocalTime();
-                        }
-                        else
-                        {
-                            // Re-read immediately before a side effect; edits/pause invalidate this batch.
-                            AppConfig latest = ConfigStore.Load();
-                            ZoneRule current = latest.Zones.FirstOrDefault(z => z.Id == selected.Id);
-                            if (latest.IsAutomationPaused() || current == null || !current.Enabled || !current.WifiRecoveryEnabled || !ZoneSchedule.Allows(current, DateTime.Now)
-                                || new JavaScriptSerializer().Serialize(current) != new JavaScriptSerializer().Serialize(selected))
+                            string scheduleKey = new JavaScriptSerializer().Serialize(selected);
+                            state.ZoneId = selected.Id;
+                            state.TargetSsid = selected.ConnectSsid;
+                            DateTime due;
+                            if (_wifiDue.TryGetValue(scheduleKey, out due) && due > DateTime.UtcNow)
                             {
-                                state.Status = "cancelled";
-                                state.Message = "설정이 바뀌어 이번 확인을 건너뛰었습니다.";
-                            }
-                            else if (WifiRecoveryPolicy.AlreadyConnected(networks, selected.ConnectSsid))
-                            {
-                                _wifiFailures[scheduleKey] = 0;
-                                _wifiDue[scheduleKey] = DateTime.UtcNow.AddSeconds(selected.WifiRecoveryIntervalSeconds);
-                                state.Status = "connected";
-                                state.Message = "원하는 Wi-Fi에 이미 연결되어 있어 건너뛰었습니다.";
-                                state.NextCheckAt = _wifiDue[scheduleKey].ToLocalTime();
+                                state.Status = "scheduled";
+                                state.Message = "다음 확인 주기를 기다립니다.";
+                                state.NextCheckAt = due.ToLocalTime();
                             }
                             else
                             {
-                                WifiConnectionResult result = WifiActions.Connect(selected.ConnectProfile, selected.ConnectSsid);
-                                int failures;
-                                _wifiFailures.TryGetValue(scheduleKey, out failures);
-                                failures = result.Succeeded ? 0 : failures + 1;
-                                _wifiFailures[scheduleKey] = failures;
-                                _wifiDue[scheduleKey] = DateTime.UtcNow.AddSeconds(WifiRecoveryPolicy.RetrySeconds(selected.WifiRecoveryIntervalSeconds, failures));
-                                state.NextCheckAt = _wifiDue[scheduleKey].ToLocalTime();
-                                state.Status = result.Succeeded ? "reconnected" : "failed";
-                                state.ConnectedSsid = result.ConnectedSsid;
-                                state.Message = result.Succeeded ? "Wi-Fi 연결을 복구했습니다." : result.Summary;
+                                // Re-read immediately before a side effect; edits/pause invalidate this batch.
+                                AppConfig latest = ConfigStore.Load();
+                                ZoneRule current = latest.Zones.FirstOrDefault(z => z.Id == selected.Id);
+                                if (latest.IsAutomationPaused() || current == null || !current.Enabled || !current.WifiRecoveryEnabled || !ZoneSchedule.Allows(current, DateTime.Now)
+                                    || new JavaScriptSerializer().Serialize(current) != new JavaScriptSerializer().Serialize(selected))
+                                {
+                                    state.Status = "cancelled";
+                                    state.Message = "설정이 바뀌어 이번 확인을 건너뛰었습니다.";
+                                }
+                                else if (WifiRecoveryPolicy.AlreadyConnected(networks, selected.ConnectSsid))
+                                {
+                                    _wifiFailures[scheduleKey] = 0;
+                                    _wifiDue[scheduleKey] = DateTime.UtcNow.AddSeconds(selected.WifiRecoveryIntervalSeconds);
+                                    state.Status = "connected";
+                                    state.Message = "원하는 Wi-Fi에 이미 연결되어 있어 건너뛰었습니다.";
+                                    state.NextCheckAt = _wifiDue[scheduleKey].ToLocalTime();
+                                }
+                                else
+                                {
+                                    WifiConnectionResult result = WifiActions.Connect(selected.ConnectProfile, selected.ConnectSsid);
+                                    int failures;
+                                    _wifiFailures.TryGetValue(scheduleKey, out failures);
+                                    failures = result.Succeeded ? 0 : failures + 1;
+                                    _wifiFailures[scheduleKey] = failures;
+                                    _wifiDue[scheduleKey] = DateTime.UtcNow.AddSeconds(WifiRecoveryPolicy.RetrySeconds(selected.WifiRecoveryIntervalSeconds, failures));
+                                    state.NextCheckAt = _wifiDue[scheduleKey].ToLocalTime();
+                                    state.Status = result.Succeeded ? "reconnected" : "failed";
+                                    state.ConnectedSsid = result.ConnectedSsid;
+                                    state.Message = result.Succeeded ? "Wi-Fi 연결을 복구했습니다." : result.Summary;
+                                }
                             }
                         }
                     }
@@ -102,11 +114,13 @@ namespace WinZoneTrigger
                 {
                     state.Status = "error";
                     state.Message = "Wi-Fi 확인 실패: " + ex.Message;
+                    state.NextCheckAt = DateTime.Now.AddSeconds(30);
                 }
                 NetworkHealth.Read(state);
-                if (state.Status != "error" && string.IsNullOrEmpty(state.ConnectedSsid))
+                bool uncertain = state.Status == "error" || state.Status == "radio-error" || state.Status == "cancelled";
+                if (!uncertain && string.IsNullOrEmpty(state.ConnectedSsid))
                     _disconnectedSince = _disconnectedSince ?? DateTime.Now;
-                else if (state.Status != "error")
+                else if (!uncertain)
                 {
                     if (_disconnectedSince.HasValue || state.Status == "reconnected") _lastRecoveredAt = DateTime.Now;
                     _disconnectedSince = null;

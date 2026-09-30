@@ -8,6 +8,7 @@
 
 /* Keep the compact location rail scrollable even with very long names. */
 #zones,.sidebar{min-width:0}
+.connection.warning{background:#fbf6eb;border-color:#eadcbe}.connection.warning strong,.connection.warning .small-label,.connection.warning .connection-meta b{color:var(--warning)}.connection.warning .signal-icon i{background:var(--warning)}.connection.neutral{background:#edf1f3;border-color:var(--line)}
 
 .quick-controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}.quick-controls .button{min-height:42px}.quick-controls .quick-hint{font-size:11px;color:var(--muted);width:100%;line-height:1.7}.decision{border-left:3px solid var(--accent);padding:8px 12px;margin-bottom:20px;font-size:12px;line-height:1.7;color:var(--muted);overflow-wrap:anywhere}.day-picker{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px}.day-picker label{position:relative;cursor:pointer}.day-picker input{position:absolute;opacity:0}.day-picker span{display:grid;place-items:center;width:42px;height:42px;border:1px solid var(--line);border-radius:10px;background:var(--paper);font-size:12px}.day-picker input:checked+span{background:var(--accent);color:white;border-color:var(--accent)}.day-picker input:focus-visible+span{outline:3px solid var(--blue);outline-offset:3px}.panel>.field+.field{margin-top:18px}#wifi-health{font-size:12px;line-height:1.9;overflow-wrap:anywhere}.health-state{display:block;font-weight:650;color:var(--accent);margin-bottom:8px}.health-state.warning{color:var(--warning)}
 

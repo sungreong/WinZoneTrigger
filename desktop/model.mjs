@@ -32,3 +32,11 @@ export function zoneAvailability(zone, config, status, now = Date.now()) {
   if(d.TimeAllowed!==true) return {key:'unknown',label:'조건 확인 필요',tone:'neutral',detail:'새 엔진의 조건 확인 결과를 기다리고 있습니다.'};
   return {key:'ready',label:'현재 위치 일치',tone:'',detail:'사용 설정이 켜져 있고 현재 위치·시간 조건이 맞습니다. 등록한 자동화 방식에 따라 실행합니다.'};
 }
+
+export function wifiPresentation(w = {}, networks = []) {
+  const titles = {'radio-starting':'Wi-Fi 전원을 켜는 중', 'radio-blocked':'Wi-Fi 전원을 켤 수 없어요', 'radio-unavailable':'Wi-Fi 장치 확인 필요', 'radio-error':'Wi-Fi 전원 복구 실패', error:'Wi-Fi 확인 실패', failed:'Wi-Fi 연결 복구 실패'};
+  if(titles[w.Status]) return {title:titles[w.Status],tone:'warning'};
+  // An explicit disconnected observation must not fall back to an older picker scan.
+  const connected=w.CheckedAt?w.ConnectedSsid:(w.ConnectedSsid||networks.filter(n=>n.Connected).map(n=>n.Ssid).join(', '));
+  return {title:connected||'연결된 Wi-Fi 없음',tone:connected?'':'neutral'};
+}
