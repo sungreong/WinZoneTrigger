@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {escapeHtml,lines,asDate,applyNetwork,paused} from '../desktop/model.mjs';
+import {escapeHtml,lines,asDate,applyNetwork,paused,zoneAvailability} from '../desktop/model.mjs';
 test('untrusted SSID and log text is escaped',()=>assert.equal(escapeHtml('<img onerror="x">&'), '&lt;img onerror=&quot;x&quot;&gt;&amp;'));
 test('legacy .NET date format remains readable',()=>assert.equal(asDate('/Date(1700000000000)/').getTime(),1700000000000));
 test('empty dates remain unknown',()=>assert.equal(asDate(null),null));
@@ -8,3 +8,14 @@ test('Windows multiline actions are preserved',()=>assert.deepEqual(lines('a\r\n
 test('selecting a target preserves detection conditions',()=>{const z={NearbySsids:['beacon']};applyNetwork(z,{Ssid:'Home',ProfileName:'Saved Home'});assert.equal(z.ConnectProfile,'Saved Home');assert.deepEqual(z.NearbySsids,['beacon']);});
 test('unsaved networks cannot be selected',()=>assert.throws(()=>applyNetwork({}, {Ssid:'Guest',ProfileName:''})));
 test('legacy pause uses its actual timestamp',()=>{assert.ok(paused({AutomationPausedUntilUtc:`/Date(${Date.now()+60000})/`}));assert.ok(!paused({AutomationPausedUntilUtc:'/Date(1)/'}));});
+
+const now=Date.now(), z={Id:'home',Enabled:true,ScanIntervalSeconds:30};
+const live={Automation:{UpdatedAtLocal:new Date(now).toISOString()},Decisions:[{ZoneId:'home',Enabled:true,LocationMatches:true,TimeAllowed:true,CheckedAt:new Date(now).toISOString()}]};
+test('enabled alone never means currently usable',()=>assert.equal(zoneAvailability(z,{},{}).key,'unknown'));
+test('matching location is ready',()=>assert.equal(zoneAvailability(z,{},live,now).key,'ready'));
+test('enabled but outside location waits',()=>{const s=structuredClone(live);s.Decisions[0].LocationMatches=false;assert.equal(zoneAvailability(z,{},s,now).key,'outside');});
+test('unknown detection never reuses sticky active state',()=>{const s=structuredClone(live);s.Decisions[0].LocationMatches=null;s.Automation.ActiveZoneIds=['home'];assert.equal(zoneAvailability(z,{},s,now).key,'unknown');});
+test('matching location outside hours waits',()=>{const s=structuredClone(live);s.Decisions[0].TimeAllowed=false;assert.equal(zoneAvailability(z,{},s,now).key,'schedule');});
+test('disabled has a separate status',()=>assert.equal(zoneAvailability({...z,Enabled:false},{},live,now).key,'disabled'));
+test('paused stays distinct from outside',()=>assert.equal(zoneAvailability(z,{AutomationPausedUntilUtc:new Date(now+60000).toISOString()},live,now).key,'paused'));
+test('stale observation cannot show ready',()=>assert.equal(zoneAvailability(z,{},live,now+240000).key,'unknown'));

@@ -16,12 +16,20 @@ fn show(app: &tauri::AppHandle) {
 }
 
 fn main() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, args, _| {
+    // Isolated package verification must not be forwarded to a user's running app.
+    let verify_package = std::env::args().any(|a| a == "--verify-package")
+        && std::env::var_os("WINZONE_TEST_DATA").is_some();
+    let builder = tauri::Builder::default();
+    let builder = if verify_package {
+        builder
+    } else {
+        builder.plugin(tauri_plugin_single_instance::init(|app, args, _| {
             if !args.iter().any(|a| a == "--minimized") {
                 show(app);
             }
         }))
+    };
+    builder
         .invoke_handler(tauri::generate_handler![
             bridge::engine_request,
             bridge::read_status,

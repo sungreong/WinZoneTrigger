@@ -10,7 +10,7 @@ namespace WinZoneTrigger
         private int GetShortestConditionScanIntervalSeconds()
         {
             List<int> intervals = _config.Zones
-                .Where(z => z.Enabled && (z.MonitoringEnabled.GetValueOrDefault(false) || z.RestoreAudioOnExit || z.ScheduleEnabled || z.GetEnabledAppWatchItems().Any()))
+                .Where(z => z.Enabled && (z.MonitoringEnabled.GetValueOrDefault(false) || z.WifiRecoveryEnabled || z.RestoreAudioOnExit || z.ScheduleEnabled || z.GetEnabledAppWatchItems().Any()))
                 .Select(z => z.ScanIntervalSeconds < 5 ? 30 : z.ScanIntervalSeconds)
                 .ToList();
             return intervals.Count == 0 ? 30 : intervals.Min();

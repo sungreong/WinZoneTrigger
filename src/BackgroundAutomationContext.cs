@@ -478,13 +478,6 @@ namespace WinZoneTrigger
             {
                 zone.Normalize();
                 bool wasInside = IsZoneActive(zone);
-                if (manualZone != null && manualZone != zone.Id)
-                {
-                    if (wasInside) { activeZoneIds.Add(zone.Id); activeZoneNames.Add(zone.Name); }
-                    decisions.Add(new ZoneDecision { ZoneId = zone.Id, Name = zone.Name, CheckedAt = DateTime.Now,
-                        Message = "지금 실행에서 선택하지 않은 위치 · 기존 감시 상태 유지" });
-                    continue;
-                }
                 ZoneMatchResult match = AnalyzeZoneMatch(zone, visibleSsids, currentLocation, startupOnly);
                 bool timeAllowed = ZoneSchedule.Allows(zone, DateTime.Now);
                 bool actualNear = zone.Enabled && timeAllowed && match.Matches;
@@ -507,9 +500,17 @@ namespace WinZoneTrigger
 
                 if (manualZone != null) shouldTrigger = manualZone == zone.Id && actualNear;
                 decisions.Add(new ZoneDecision { ZoneId = zone.Id, Name = zone.Name, CheckedAt = DateTime.Now,
+                    Enabled = zone.Enabled, TimeAllowed = timeAllowed,
+                    LocationMatches = match.Matches ? true : preserveActiveZones ? (bool?)null : false,
                     Message = !zone.Enabled ? "위치 비활성" : !timeAllowed ? "요일·시간 조건 밖 · 실행 대기"
                     : shouldTrigger ? reason + " → 실행 요청" : !near ? reason + " → 대기"
                     : !eligible ? "위치 감지됨 · 진입 동작 지속 감시 꺼짐" : "이미 실행한 위치 · 중복 실행 건너뜀" });
+
+                if (manualZone != null && manualZone != zone.Id)
+                {
+                    if (wasInside) { activeZoneIds.Add(zone.Id); activeZoneNames.Add(zone.Name); }
+                    continue;
+                }
 
                 DiagnosticsLog.WriteThrottled("zone:" + zone.Id + ":" + near + ":" + eligible, "백그라운드 위치 판정: " + zone.Name
                     + " / enabled=" + zone.Enabled
@@ -845,7 +846,7 @@ namespace WinZoneTrigger
 
         private bool HasZoneConditionScanZones()
         {
-            return _config.Zones.Any(z => z.Enabled && (z.MonitoringEnabled.GetValueOrDefault(false) || z.RestoreAudioOnExit || z.ScheduleEnabled || z.GetEnabledAppWatchItems().Any()));
+            return _config.Zones.Any(z => z.Enabled && (z.MonitoringEnabled.GetValueOrDefault(false) || z.WifiRecoveryEnabled || z.RestoreAudioOnExit || z.ScheduleEnabled || z.GetEnabledAppWatchItems().Any()));
         }
 
         private bool HasAppWatchZones()

@@ -1,4 +1,4 @@
-import {escapeHtml as e, time, asDate, paused, lines, applyNetwork} from './model.mjs';
+import {escapeHtml as e, time, asDate, paused, lines, applyNetwork, zoneAvailability} from './model.mjs';
 import {wifiView,conditionsView,actionsView,watchView,settingsView,logsView,toggle} from './views.js';
 import {demoConfig,demoNetworks,demoStatus} from './demo.mjs';
 
@@ -30,15 +30,16 @@ function setDirty(value=true){dirty=value;if(value)editVersion++;$('dirty-dot').
 async function confirm(title,message){$('confirm-title').textContent=title;$('confirm-message').textContent=message;const d=$('confirm');d.showModal();return new Promise(resolve=>d.addEventListener('close',()=>resolve(d.returnValue==='ok'),{once:true}));}
 
 function renderNav(){
- $('zones').innerHTML=config.Zones.map((z,i)=>`<button class="zone-button ${z.Id===selected?'selected':''}" data-zone="${e(z.Id)}" aria-current="${z.Id===selected?'page':'false'}"><span class="zone-icon">${i===0?'⌂':'◇'}</span><span class="zone-copy"><strong>${e(z.Name)}</strong><small>${z.Enabled?(z.WifiRecoveryEnabled?'자동 복구 켜짐':'운영 중'):'미운영'}</small></span><span class="dot ${z.Enabled?'':'neutral'}"></span></button>`).join('');
+ $('zones').innerHTML=config.Zones.map((z,i)=>{const state=zoneAvailability(z,config,status);return `<button class="zone-button state-${state.key} ${z.Id===selected?'selected':''}" data-zone="${e(z.Id)}" aria-current="${z.Id===selected?'page':'false'}" title="${e(state.detail)}"><span class="zone-icon">${i===0?'⌂':'◇'}</span><span class="zone-copy"><strong>${e(z.Name)}</strong><small class="${state.tone}">${e(state.label)}</small></span><span class="dot ${state.tone}"></span></button>`;}).join('');
 }
+
 function render(){
  if(!config)return;
  renderNav();const z=zone();const global=tab==='settings'||tab==='logs';
  $('title').textContent=tab==='settings'?'내 PC의 자동화':tab==='logs'?'공간의 활동 기록':z?.Name||'첫 공간을 만들어보세요';
  $('subtitle').textContent=tab==='settings'?'시작부터 잠시 쉬어갈 때까지, 원하는 방식으로.':tab==='logs'?'연결을 확인하고, 실행한 일을 돌아보세요.':z?'이 공간에서의 연결과 하루의 시작을 준비하세요.':'왼쪽 ＋ 버튼으로 위치를 추가하면 자동화를 시작할 수 있습니다.';
  $('breadcrumb').textContent=global?(tab==='settings'?'앱 설정':'활동 기록'):z?.Name||'새 위치';
- $('zone-actions').innerHTML=!global&&z?toggle('Enabled',z.Enabled,z.Enabled?'운영 중':'미운영'):'';
+ $('zone-actions').innerHTML=!global&&z?toggle('Enabled',z.Enabled,'자동화 사용'):'';
  $('tabs').hidden=global||!z;
  $('tabs').innerHTML=[['wifi','Wi-Fi 복구'],['conditions','위치 감지'],['actions','실행 동작'],['watch','앱 감시']].map(([id,label])=>`<button class="tab ${tab===id?'selected':''}" data-tab="${id}" aria-current="${tab===id?'page':'false'}">${label}${id==='watch'&&z?.AppWatchItems?.length?` · ${z.AppWatchItems.length}`:''}</button>`).join('');
  $('connection').hidden=global||tab!=='wifi';
@@ -53,14 +54,22 @@ function updateStatus(){
  const a=status.Automation||{},w=status.Wifi||{},date=asDate(a.UpdatedAtLocal);
  const stale=!date||Date.now()-date.getTime()>180000;
  const decision=(status.Decisions||[]).find(d=>d.ZoneId===selected);
+ renderNav();
+ const state=zoneAvailability(zone(),config,status);
+ const runButton=document.querySelector('[data-quick="run-now"]');if(runButton){runButton.textContent=state.key==='ready'?'▶ 지금 실행':'↻ 지금 조건 확인';runButton.disabled=!zone()?.Enabled||!!paused(config);}
+ $('availability').hidden=!zone()||tab==='settings'||tab==='logs';
+ $('availability').className=`availability ${state.tone}`;
+ $('availability').innerHTML=`<span class="dot ${state.tone}"></span><div><strong>${e(state.label)}</strong><p>${e(state.detail)}</p></div>`;
  $('decision').textContent=decision?`${time(decision.CheckedAt)} · ${decision.Message}`:'아직 위치 확인 기록이 없습니다. 지금 실행으로 조건을 확인할 수 있어요.';
  const audio=$('audio-feedback');if(audio)audio.textContent=status.Audio?.Message||'';
  const health=$('wifi-health');
  if(health)health.innerHTML=`<span class="health-state ${w.InternetStatus==='no-internet'?'warning':''}">${e(w.InternetMessage||'상태 확인 버튼으로 Windows 연결 진단을 가져오세요.')}</span><span>${w.DisconnectedSince?'Wi-Fi 끊김 감지: '+time(w.DisconnectedSince):'마지막 복구: '+time(w.LastRecoveredAt)}</span>`;
- $('engine-status').textContent=demo?'화면 미리보기':paused(config)?'자동화 정지 중':stale?'상태 확인 필요':'자동화 동작 중';
+ $('engine-status').textContent=demo?'화면 미리보기':paused(config)?'자동화 정지 중':stale?'상태 확인 필요':'백그라운드 정상';
  $('engine-status').className=`status-pill ${!demo&&(stale||paused(config))?'warning':''}`;
+ const wifiZone=config?.Zones.find(z=>z.Id===w.ZoneId);
+ const wifiMessage=wifiZone&&wifiZone.Id!==selected?`${wifiZone.Name}의 최근 복구: ${w.Message||''}`:w.Message;
  const connected=w.ConnectedSsid||networks.filter(n=>n.Connected).map(n=>n.Ssid).join(', ');
- $('connection').innerHTML=`<div class="signal-icon" aria-hidden="true"><i></i><i></i><i></i></div><div><div class="small-label">${connected?'최근 확인한 연결':'연결 상태'}</div><strong>${e(connected||'아직 연결을 확인하지 않았어요')}</strong><p>${e(w.Message||'주변 Wi-Fi를 찾아 원하는 연결을 선택해보세요.')}</p></div><div class="connection-meta"><div>최근 확인 <b>${time(w.CheckedAt)}</b></div><div>다음 확인 <b>${w.NextCheckAt?time(w.NextCheckAt):'설정한 주기마다'}</b></div></div>`;
+ $('connection').innerHTML=`<div class="signal-icon" aria-hidden="true"><i></i><i></i><i></i></div><div><div class="small-label">PC의 Wi-Fi 연결</div><strong>${e(connected||'아직 연결을 확인하지 않았어요')}</strong><p>${e(wifiMessage||'주변 Wi-Fi를 찾아 원하는 연결을 선택해보세요.')}</p></div><div class="connection-meta"><div>최근 확인 <b>${time(w.CheckedAt)}</b></div><div>다음 확인 <b>${w.NextCheckAt?time(w.NextCheckAt):'설정한 주기마다'}</b></div></div>`;
 }
 async function refreshStatus(){status=demo?demoStatus():await window.__TAURI__.core.invoke('read_status');if(renderedPause!==!!paused(config)){render();return;}updateStatus();if(tab==='logs')$('content').innerHTML=logsView(status);}
 async function load(){const result=await request('load');config=result.Config;revision=result.Revision;startup=result.Startup;selected=config.Zones.some(z=>z.Id===selected)?selected:config.Zones[0]?.Id;setDirty(false);render();await refreshStatus();}
@@ -80,8 +89,8 @@ function edit(event){
  let target=scope==='config'?config:scope==='period'?config.BrightnessPeriods[Number(input.closest('[data-period]').dataset.period)]:scope==='watch'?zone()?.AppWatchItems[Number(input.closest('[data-watch]').dataset.watch)]:zone();
  if(!target)return;
  target[key]=input.dataset.minute?Number(input.value.split(':')[0])*60+Number(input.value.split(':')[1]):input.type==='checkbox'?input.checked:input.dataset.list?lines(input.value):input.type==='number'?Number(input.value):input.value;
- setDirty();if(key==='Name'||key==='Enabled'||key==='WifiRecoveryEnabled')renderNav();
- if(key==='Enabled'&&(!scope||scope==='zone')){$('zone-actions').innerHTML=toggle('Enabled',target.Enabled,target.Enabled?'운영 중':'미운영');}
+ setDirty();if(key==='Name'||key==='Enabled'||key==='WifiRecoveryEnabled')updateStatus();
+ if(key==='Enabled'&&(!scope||scope==='zone')){$('zone-actions').innerHTML=toggle('Enabled',target.Enabled,'자동화 사용');}
 }
 $('content').addEventListener('input',edit);$('zone-actions').addEventListener('change',edit);
 $('zones').addEventListener('click',event=>{const b=event.target.closest('[data-zone]');if(b){selected=b.dataset.zone;tab='wifi';render();$('workspace').scrollTop=0;}});

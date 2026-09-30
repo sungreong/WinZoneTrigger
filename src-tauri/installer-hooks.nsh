@@ -1,3 +1,5 @@
+!include "${__FILEDIR__}\installer-upgrade.nsh"
+
 ; Stop only WinZoneTrigger processes before replacing this application's binaries.
 !macro NSIS_HOOK_PREINSTALL
   nsExec::ExecToLog 'taskkill /F /IM WinZoneTrigger.Engine.exe'
@@ -7,6 +9,12 @@
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
+  ; These are the only obsolete legacy files; settings live in APPDATA and are untouched.
+  ${If} $INSTDIR == "${WINZONE_LEGACY_DIR}"
+    Delete "$INSTDIR\WinZoneTrigger_Uninstall.exe"
+    IfFileExists "$SMPROGRAMS\WinZoneTrigger\위치 자동 실행 제거.lnk" 0 +2
+      CreateShortCut "$SMPROGRAMS\WinZoneTrigger\위치 자동 실행 제거.lnk" "$INSTDIR\uninstall.exe"
+  ${EndIf}
   nsExec::ExecToLog 'schtasks /Delete /TN WinZoneTrigger /F'
   Pop $0
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "WinZoneTrigger" '"$INSTDIR\WinZoneTrigger.exe" --startup --minimized'

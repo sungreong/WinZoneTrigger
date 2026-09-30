@@ -11,6 +11,9 @@ namespace WinZoneTrigger
         public string ZoneId { get; set; }
         public string Name { get; set; }
         public string Message { get; set; }
+        public bool Enabled { get; set; }
+        public bool? LocationMatches { get; set; }
+        public bool TimeAllowed { get; set; }
         public DateTime CheckedAt { get; set; }
     }
     internal sealed class ManualRunRequest
