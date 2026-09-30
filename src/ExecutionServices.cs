@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -162,6 +162,24 @@ namespace WinZoneTrigger
     {
         public static WifiConnectionResult Connect(string profileName, string ssid)
         {
+            using (Mutex gate = new Mutex(false, @"Local\WinZoneTrigger.WifiConnect"))
+            {
+                bool acquired = false;
+                try
+                {
+                    try { acquired = gate.WaitOne(60000); } catch (AbandonedMutexException) { acquired = true; }
+                    if (!acquired) throw new InvalidOperationException("다른 Wi-Fi 연결 작업이 진행 중입니다.");
+                    if (WifiRecoveryPolicy.AlreadyConnected(WifiLocator.GetVisibleNetworks(false), ssid))
+                        return new WifiConnectionResult { RequestResult = new CommandResult { ExitCode = 0 }, TargetSsid = ssid,
+                            ConnectedSsid = ssid, Verified = true, VerificationSummary = "이미 연결됨 · 연결 요청 건너뜀" };
+                    return ConnectCore(profileName, ssid);
+                }
+                finally { if (acquired) gate.ReleaseMutex(); }
+            }
+        }
+
+        private static WifiConnectionResult ConnectCore(string profileName, string ssid)
+        {
             string arguments = "wlan connect name=" + Quote(profileName);
             if (!string.IsNullOrWhiteSpace(ssid))
             {
@@ -191,11 +209,11 @@ namespace WinZoneTrigger
             DateTime deadline = DateTime.UtcNow.AddSeconds(30);
             while (DateTime.UtcNow < deadline)
             {
-                string connectedSsid = GetConnectedSsid();
+                string connectedSsid = WifiLocator.GetVisibleNetworks(false).Where(n => n.Connected && n.Ssid == ssid).Select(n => n.Ssid).FirstOrDefault();
                 if (!string.IsNullOrWhiteSpace(connectedSsid))
                 {
                     result.ConnectedSsid = connectedSsid;
-                    if (string.Equals(connectedSsid, ssid, StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(connectedSsid, ssid, StringComparison.Ordinal))
                     {
                         result.Verified = true;
                         result.VerificationSummary = "현재 연결 SSID 확인: " + connectedSsid;
@@ -579,24 +597,19 @@ namespace WinZoneTrigger
             return modes.Count == 0 ? "미등록" : string.Join(", ", modes.ToArray());
         }
 
+        private static string StartupExecutable
+        {
+            get
+            {
+                string desktop = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WinZoneTrigger.exe");
+                return File.Exists(desktop) ? desktop : Application.ExecutablePath;
+            }
+        }
+
         public static void EnsurePreferredRegistration(bool startMinimized)
         {
-            if (!IsRunKeyEnabled() || IsScheduledTaskEnabled())
-            {
-                return;
-            }
-
-            try
-            {
-                CreateScheduledTask(startMinimized);
-                DeleteRunKey();
-                DeleteStartupShortcut();
-                DiagnosticsLog.WriteEvent("자동 시작 자가 복구: Run 레지스트리를 작업 스케줄러로 이전했습니다.");
-            }
-            catch (Exception ex)
-            {
-                DiagnosticsLog.WriteEvent("자동 시작 자가 복구 실패: " + ex.Message);
-            }
+            // The per-user Run key is a supported registration, not a failed scheduled task.
+            // Do not retry a privileged migration on every launch.
         }
 
         public static void SetEnabled(bool enabled, bool startMinimized)
@@ -684,7 +697,7 @@ namespace WinZoneTrigger
             using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RunKeyPath, false))
             {
                 object value = key == null ? null : key.GetValue(RunValueName);
-                return value != null && Convert.ToString(value).IndexOf(Application.ExecutablePath, StringComparison.OrdinalIgnoreCase) >= 0;
+                return value != null && Convert.ToString(value).IndexOf(StartupExecutable, StringComparison.OrdinalIgnoreCase) >= 0;
             }
         }
 
@@ -714,12 +727,12 @@ namespace WinZoneTrigger
 
         private static string BuildStartupCommand(bool startMinimized)
         {
-            return Quote(Application.ExecutablePath) + (startMinimized ? " --startup --minimized" : " --startup");
+            return Quote(StartupExecutable) + (startMinimized ? " --startup --minimized" : " --startup");
         }
 
         private static string BuildScheduledTaskXml(bool startMinimized)
         {
-            string exePath = Application.ExecutablePath;
+            string exePath = StartupExecutable;
             string arguments = startMinimized ? "--startup --minimized" : "--startup";
             string workingDirectory = Path.GetDirectoryName(exePath) ?? "";
             string userId = WindowsIdentity.GetCurrent() == null ? "" : WindowsIdentity.GetCurrent().Name;

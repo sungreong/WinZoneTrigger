@@ -17,7 +17,7 @@ if (-not $csc) {
 }
 
 $sources = Get-ChildItem -Path $src -Filter '*.cs' | ForEach-Object { $_.FullName }
-$exe = Join-Path $out 'WinZoneTrigger.exe'
+$exe = Join-Path $out 'WinZoneTrigger.Engine.exe'
 $icon = Join-Path $root 'assets\app.ico'
 
 if (-not (Test-Path $icon)) {

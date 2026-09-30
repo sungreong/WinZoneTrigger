@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text;
+using System.Collections.Generic;
 
 namespace WinZoneTrigger
 {
@@ -8,6 +9,18 @@ namespace WinZoneTrigger
     {
         private static readonly object SyncRoot = new object();
         private const long MaxLogBytes = 1024 * 1024;
+        private static readonly Dictionary<string, DateTime> LastMessages = new Dictionary<string, DateTime>();
+
+        public static void WriteThrottled(string key, string message)
+        {
+            lock (SyncRoot)
+            {
+                DateTime last;
+                if (LastMessages.TryGetValue(key, out last) && DateTime.UtcNow - last < TimeSpan.FromMinutes(5)) return;
+                LastMessages[key] = DateTime.UtcNow;
+            }
+            WriteEvent(message);
+        }
 
         public static readonly string ErrorLogPath =
             Path.Combine(ConfigStore.ConfigDirectory, "errors.log");

@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$buildScript = Join-Path $root 'build.ps1'
+$buildScript = Join-Path $root 'build-installer.ps1'
 $sourceExe = Join-Path $root 'bin\WinZoneTrigger.exe'
 $installDir = Join-Path $env:LOCALAPPDATA 'Programs\WinZoneTrigger'
 $installExe = Join-Path $installDir 'WinZoneTrigger.exe'
@@ -25,9 +25,11 @@ if (-not (Test-Path $sourceExe)) {
 }
 
 Get-Process WinZoneTrigger -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process WinZoneTrigger.Engine -ErrorAction SilentlyContinue | Stop-Process -Force
 
 New-Item -ItemType Directory -Force -Path $installDir | Out-Null
 Copy-Item -LiteralPath $sourceExe -Destination $installExe -Force
+Copy-Item -LiteralPath (Join-Path $root 'bin\WinZoneTrigger.Engine.exe') -Destination (Join-Path $installDir 'WinZoneTrigger.Engine.exe') -Force
 
 if (Test-Path (Join-Path $root 'README.md')) {
     Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination (Join-Path $installDir 'README.md') -Force

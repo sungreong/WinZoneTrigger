@@ -22,6 +22,8 @@ namespace WinZoneTrigger
         public string ProfileName { get; set; }
         public int SignalQuality { get; set; }
         public bool Connectable { get; set; }
+        public bool Connected { get; set; }
+        public string InterfaceName { get; set; }
     }
 
     internal sealed class AppSearchCandidate

@@ -343,6 +343,9 @@ namespace WinZoneTrigger
         public bool? ConnectWifiEnabled { get; set; }
         public string ConnectProfile { get; set; }
         public string ConnectSsid { get; set; }
+        public bool WifiRecoveryEnabled { get; set; }
+        public int WifiRecoveryIntervalSeconds { get; set; }
+        public int WifiPriority { get; set; }
         public string AudioAction { get; set; }
         public List<string> ChromeUrls { get; set; }
         public List<string> AppLaunches { get; set; }
@@ -375,6 +378,8 @@ namespace WinZoneTrigger
                 ConnectWifiEnabled = false,
                 ConnectProfile = "",
                 ConnectSsid = "",
+                WifiRecoveryIntervalSeconds = 60,
+                WifiPriority = 10,
                 AudioAction = "None",
                 ChromeUrls = new List<string>(),
                 AppLaunches = new List<string>(),
@@ -409,6 +414,9 @@ namespace WinZoneTrigger
                 ConnectWifiEnabled = ConnectWifiEnabled,
                 ConnectProfile = ConnectProfile,
                 ConnectSsid = ConnectSsid,
+                WifiRecoveryEnabled = WifiRecoveryEnabled,
+                WifiRecoveryIntervalSeconds = WifiRecoveryIntervalSeconds,
+                WifiPriority = WifiPriority,
                 AudioAction = AudioAction,
                 ChromeUrls = ChromeUrls == null ? new List<string>() : new List<string>(ChromeUrls),
                 AppLaunches = AppLaunches == null ? new List<string>() : new List<string>(AppLaunches),
@@ -570,6 +578,9 @@ namespace WinZoneTrigger
             {
                 ConnectProfile = "";
             }
+
+            WifiRecoveryIntervalSeconds = WifiRecoveryIntervalSeconds <= 0 ? 60 : Math.Max(30, Math.Min(3600, WifiRecoveryIntervalSeconds));
+            WifiPriority = Math.Max(0, Math.Min(100, WifiPriority));
 
             if (ConnectSsid == null)
             {

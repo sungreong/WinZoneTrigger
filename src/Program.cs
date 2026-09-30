@@ -23,6 +23,8 @@ namespace WinZoneTrigger
         [STAThread]
         private static int Main(string[] args)
         {
+            if (HasArgument(args, "--desktop-bridge")) return DesktopBridge.Run(args);
+            if (HasArgument(args, "--logic-self-test")) return AutomationLogicTests.Run();
             if (HasArgument(args, "--scan-helper"))
             {
                 return ScanHelper.Run(args);
@@ -253,6 +255,7 @@ namespace WinZoneTrigger
                             && z.Enabled
                             && (z.RunOnceAtStartup.GetValueOrDefault(true)
                                 || z.MonitoringEnabled.GetValueOrDefault(false)
+                                || z.WifiRecoveryEnabled
                                 || z.GetEnabledAppWatchItems().Any()))));
         }
 

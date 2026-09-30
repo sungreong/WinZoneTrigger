@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {escapeHtml,lines,asDate,applyNetwork,paused} from '../desktop/model.mjs';
+test('untrusted SSID and log text is escaped',()=>assert.equal(escapeHtml('<img onerror="x">&'), '&lt;img onerror=&quot;x&quot;&gt;&amp;'));
+test('legacy .NET date format remains readable',()=>assert.equal(asDate('/Date(1700000000000)/').getTime(),1700000000000));
+test('empty dates remain unknown',()=>assert.equal(asDate(null),null));
+test('Windows multiline actions are preserved',()=>assert.deepEqual(lines('a\r\nb\n\n'),['a','b']));
+test('selecting a target preserves detection conditions',()=>{const z={NearbySsids:['beacon']};applyNetwork(z,{Ssid:'Home',ProfileName:'Saved Home'});assert.equal(z.ConnectProfile,'Saved Home');assert.deepEqual(z.NearbySsids,['beacon']);});
+test('unsaved networks cannot be selected',()=>assert.throws(()=>applyNetwork({}, {Ssid:'Guest',ProfileName:''})));
+test('legacy pause uses its actual timestamp',()=>{assert.ok(paused({AutomationPausedUntilUtc:`/Date(${Date.now()+60000})/`}));assert.ok(!paused({AutomationPausedUntilUtc:'/Date(1)/'}));});

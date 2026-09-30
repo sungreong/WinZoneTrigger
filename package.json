@@ -1,0 +1,13 @@
+{
+  "name": "win-zone-trigger",
+  "private": true,
+  "version": "1.0.63",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "test": "node --test tests/model.test.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.8.4"
+  }
+}

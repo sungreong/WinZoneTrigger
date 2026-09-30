@@ -5,3 +5,9 @@ bin/layout-preview/
 *.log
 *.user
 Thumbs.db
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+HISTORY.md
+bin/logic-test-result.txt
+dist/verification/

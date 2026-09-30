@@ -1,69 +1,20 @@
-param(
-    [switch] $SkipAppBuild
-)
-
+param([switch] $SkipAppBuild)
 $ErrorActionPreference = 'Stop'
-
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$bin = Join-Path $root 'bin'
-$dist = Join-Path $root 'dist'
-$appExe = Join-Path $bin 'WinZoneTrigger.exe'
-$installerSource = Join-Path $root 'tools\Installer.cs'
-$installerExe = Join-Path $dist 'WinZoneTrigger_Setup.exe'
-$readme = Join-Path $root 'README.md'
-$icon = Join-Path $root 'assets\app.ico'
-
-if (-not $SkipAppBuild) {
-    & (Join-Path $root 'build.ps1')
-}
-
-if (-not (Test-Path $appExe)) {
-    throw "App executable not found: $appExe"
-}
-
-if (-not (Test-Path $installerSource)) {
-    throw "Installer source not found: $installerSource"
-}
-
-if (-not (Test-Path $icon)) {
-    & (Join-Path $root 'tools\create-app-icon.ps1')
-}
-
-New-Item -ItemType Directory -Force -Path $dist | Out-Null
-
-$cscCandidates = @(
-    (Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'),
-    (Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe')
-)
-
-$csc = $cscCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-if (-not $csc) {
-    throw 'Could not find the .NET Framework C# compiler. Install .NET Framework 4.x or build on a standard Windows installation.'
-}
-
-$resourceArgs = @(
-    "/resource:$appExe,WinZoneTrigger.exe"
-)
-
-if (Test-Path $readme) {
-    $resourceArgs += "/resource:$readme,README.md"
-}
-
-& $csc `
-    /nologo `
-    /target:winexe `
-    /optimize+ `
-    /out:$installerExe `
-    /win32icon:$icon `
-    /reference:System.dll `
-    /reference:System.Core.dll `
-    /reference:System.Drawing.dll `
-    /reference:System.Windows.Forms.dll `
-    $resourceArgs `
-    $installerSource
-
-if ($LASTEXITCODE -ne 0) {
-    throw "Installer compilation failed with exit code $LASTEXITCODE."
-}
-
-Write-Host "Built installer $installerExe"
+Push-Location $root
+try {
+    if (-not $SkipAppBuild) { & (Join-Path $root 'build.ps1') }
+    if (-not (Test-Path 'node_modules/@tauri-apps/cli')) {
+        & npm.cmd ci --no-audit --no-fund
+        if ($LASTEXITCODE -ne 0) { throw 'npm ci failed.' }
+    }
+    & npm.cmd run tauri -- build --bundles nsis
+    if ($LASTEXITCODE -ne 0) { throw 'Tauri build failed.' }
+    New-Item -ItemType Directory -Force -Path (Join-Path $root 'dist') | Out-Null
+    $version = (Get-Content 'src-tauri/tauri.conf.json' -Raw | ConvertFrom-Json).version
+    $setup = Join-Path $root "src-tauri/target/release/bundle/nsis/WinZoneTrigger_${version}_x64-setup.exe"
+    if (-not (Test-Path $setup)) { throw "Tauri installer missing: $setup" }
+    Copy-Item -LiteralPath 'src-tauri/target/release/WinZoneTrigger.exe' -Destination 'bin/WinZoneTrigger.exe' -Force
+    Copy-Item -LiteralPath $setup -Destination 'dist/WinZoneTrigger_Setup.exe' -Force
+    Write-Host "Built Tauri app and installer: dist\WinZoneTrigger_Setup.exe"
+} finally { Pop-Location }

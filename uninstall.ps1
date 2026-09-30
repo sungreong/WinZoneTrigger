@@ -1,5 +1,15 @@
 $ErrorActionPreference = 'Stop'
 
+# Prefer the Tauri installer's registered uninstaller when present.
+$entry = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\WinZoneTrigger' -ErrorAction SilentlyContinue
+if ($entry -and $entry.InstallLocation) {
+    $nativeUninstaller = Join-Path ($entry.InstallLocation.Trim('"')) 'uninstall.exe'
+    if (Test-Path -LiteralPath $nativeUninstaller) {
+        Start-Process -FilePath $nativeUninstaller -Wait
+        return
+    }
+}
+
 $installDir = Join-Path $env:LOCALAPPDATA 'Programs\WinZoneTrigger'
 $startMenuDir = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\WinZoneTrigger'
 $runKeyPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
@@ -8,6 +18,7 @@ $taskName = 'WinZoneTrigger'
 $oldStartupShortcut = Join-Path ([Environment]::GetFolderPath('Startup')) 'WinZoneTrigger.lnk'
 
 Get-Process WinZoneTrigger -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process WinZoneTrigger.Engine -ErrorAction SilentlyContinue | Stop-Process -Force
 
 & schtasks.exe /Delete /F /TN $taskName 2>$null | Out-Null
 

@@ -178,7 +178,7 @@ $culture = [Globalization.CultureInfo]::InvariantCulture
             IntPtr handle = IntPtr.Zero;
             IntPtr interfacesPtr = IntPtr.Zero;
             List<WifiNetwork> networks = new List<WifiNetwork>();
-            Dictionary<string, WifiNetwork> bestBySsid = new Dictionary<string, WifiNetwork>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, WifiNetwork> bestBySsid = new Dictionary<string, WifiNetwork>(StringComparer.Ordinal);
 
             try
             {
@@ -228,7 +228,7 @@ $culture = [Globalization.CultureInfo]::InvariantCulture
                         result = NativeMethods.WlanGetAvailableNetworkList(handle, ref interfaceGuid, 0, IntPtr.Zero, out networksPtr);
                         if (result != 0)
                         {
-                            continue;
+                            throw new Win32Exception(result);
                         }
 
                         int networkCount = Marshal.ReadInt32(networksPtr, 0);
@@ -252,11 +252,14 @@ $culture = [Globalization.CultureInfo]::InvariantCulture
                                 Ssid = ssid,
                                 ProfileName = network.strProfileName ?? "",
                                 SignalQuality = Convert.ToInt32(Math.Min(100, network.wlanSignalQuality)),
-                                Connectable = network.bNetworkConnectable
+                                Connectable = network.bNetworkConnectable,
+                                Connected = (network.dwFlags & 1) != 0,
+                                InterfaceName = wlanInterface.strInterfaceDescription
                             };
 
                             WifiNetwork existing;
-                            if (!bestBySsid.TryGetValue(visible.Ssid, out existing) || existing.SignalQuality < visible.SignalQuality)
+                            if (!bestBySsid.TryGetValue(visible.Ssid, out existing) || (visible.Connected && !existing.Connected)
+                                || (!existing.Connected && existing.SignalQuality < visible.SignalQuality))
                             {
                                 bestBySsid[visible.Ssid] = visible;
                             }

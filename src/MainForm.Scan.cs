@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -446,7 +446,7 @@ namespace WinZoneTrigger
                 RenderConnectWifiTargetButtons(_lastVisibleNetworks);
             }
 
-            HashSet<string> visibleSsids = new HashSet<string>(ordered.Select(n => n.Ssid), StringComparer.OrdinalIgnoreCase);
+            HashSet<string> visibleSsids = new HashSet<string>(ordered.Select(n => n.Ssid), StringComparer.Ordinal);
             LocationInfo currentLocation = null;
             if (snapshot.LocationResult != null && snapshot.LocationResult.HasLocation)
             {
@@ -585,7 +585,7 @@ namespace WinZoneTrigger
             List<string> wanted = zone.NearbySsids
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .Select(s => s.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Distinct(StringComparer.Ordinal)
                 .ToList();
 
             bool wifiMatch = false;

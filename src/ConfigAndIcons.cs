@@ -19,7 +19,7 @@ namespace WinZoneTrigger
     internal static class ConfigStore
     {
         public static readonly string ConfigDirectory =
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinZoneTrigger");
+            Environment.GetEnvironmentVariable("WINZONE_TEST_DATA") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinZoneTrigger");
 
         public static readonly string ConfigPath = Path.Combine(ConfigDirectory, "config.json");
 
@@ -34,7 +34,7 @@ namespace WinZoneTrigger
                     return created;
                 }
 
-                string json = File.ReadAllText(ConfigPath, Encoding.UTF8);
+                string json = AtomicFile.Read(ConfigPath);
                 AppConfig config = new JavaScriptSerializer().Deserialize<AppConfig>(json);
                 if (config == null)
                 {
@@ -54,6 +54,21 @@ namespace WinZoneTrigger
 
         public static void Save(AppConfig config)
         {
+            using (Mutex gate = new Mutex(false, @"Local\WinZoneTrigger.ConfigWrite"))
+            {
+                bool acquired = false;
+                try
+                {
+                    try { acquired = gate.WaitOne(10000); } catch (AbandonedMutexException) { acquired = true; }
+                    if (!acquired) throw new IOException("다른 화면에서 설정을 저장 중입니다.");
+                    SaveCore(config);
+                }
+                finally { if (acquired) gate.ReleaseMutex(); }
+            }
+        }
+
+        private static void SaveCore(AppConfig config)
+        {
             if (!Directory.Exists(ConfigDirectory))
             {
                 Directory.CreateDirectory(ConfigDirectory);
@@ -61,7 +76,7 @@ namespace WinZoneTrigger
 
             config.Normalize();
             string json = new JavaScriptSerializer().Serialize(config);
-            File.WriteAllText(ConfigPath, json, Encoding.UTF8);
+            AtomicFile.Write(ConfigPath, json);
         }
     }
 

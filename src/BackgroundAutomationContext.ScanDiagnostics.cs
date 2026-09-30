@@ -27,7 +27,7 @@ namespace WinZoneTrigger
             List<string> wanted = zone.NearbySsids
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .Select(s => s.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Distinct(StringComparer.Ordinal)
                 .ToList();
 
             bool wifiMatch = false;
@@ -82,7 +82,7 @@ namespace WinZoneTrigger
                 .Where(z => z != null && z.ConnectWifiEnabled.GetValueOrDefault(false))
                 .Select(z => string.IsNullOrWhiteSpace(z.ConnectSsid) ? z.ConnectProfile : z.ConnectSsid)
                 .Where(s => !string.IsNullOrWhiteSpace(s))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Distinct(StringComparer.Ordinal)
                 .ToList();
 
             if (targets.Count > 1)
@@ -100,7 +100,7 @@ namespace WinZoneTrigger
                 return "없음";
             }
 
-            return string.Join(", ", visibleSsids.OrderBy(s => s, StringComparer.OrdinalIgnoreCase).Take(8).ToArray());
+            return string.Join(", ", visibleSsids.OrderBy(s => s, StringComparer.Ordinal).ToArray());
         }
 
         private static string FormatLocationForLog(LocationInfo location)

@@ -46,7 +46,7 @@ namespace WinZoneTrigger
                 }
 
                 string json = new JavaScriptSerializer().Serialize(snapshot);
-                File.WriteAllText(StatePath, json, Encoding.UTF8);
+                AtomicFile.Write(StatePath, json);
             }
             catch (Exception ex)
             {
@@ -63,7 +63,7 @@ namespace WinZoneTrigger
                     return null;
                 }
 
-                string json = File.ReadAllText(StatePath, Encoding.UTF8);
+                string json = AtomicFile.Read(StatePath);
                 return new JavaScriptSerializer().Deserialize<AutomationStateSnapshot>(json);
             }
             catch (Exception ex)

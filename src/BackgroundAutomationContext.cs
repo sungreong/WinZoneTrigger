@@ -55,9 +55,12 @@ namespace WinZoneTrigger
         private string _stateLastAppWatchItemText = "";
         private volatile bool _powerResumeDetected;
         private bool _automationWasPaused;
+        private DateTime _lastHeartbeatUtc;
 
         public BackgroundAutomationContext()
         {
+            if (SynchronizationContext.Current == null)
+                SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
             _uiContext = SynchronizationContext.Current;
             LoadConfigFromDisk("시작", false);
             _scanTimer = new System.Windows.Forms.Timer();
@@ -159,6 +162,12 @@ namespace WinZoneTrigger
         {
             bool wasPaused = _automationWasPaused;
             ReloadConfigIfChanged();
+            PollWifiRecovery();
+            if (DateTime.UtcNow - _lastHeartbeatUtc > TimeSpan.FromSeconds(60))
+            {
+                _lastHeartbeatUtc = DateTime.UtcNow;
+                lock (_automationStateLock) SaveAutomationStateLocked();
+            }
             if (!wasPaused || _config == null || _config.IsAutomationPaused())
             {
                 return;
@@ -255,7 +264,7 @@ namespace WinZoneTrigger
                 return;
             }
 
-            if (_scanInProgress || _appWatchInProgress || _zoneActionInProgress)
+            if (_scanInProgress || _appWatchInProgress || _zoneActionInProgress || _wifiRecoveryInProgress)
             {
                 DiagnosticsLog.WriteEvent("백그라운드 부팅 초기 확인 대기: 다른 자동 작업 진행 중");
                 _startupRetryTimer.Start();
@@ -293,11 +302,7 @@ namespace WinZoneTrigger
 
         private void ScanTimerTick(object sender, EventArgs e)
         {
-            if (ReloadConfigIfChanged())
-            {
-                StartInitialScan();
-                return;
-            }
+            ReloadConfigIfChanged();
 
             if (_startupRetryActive)
             {
@@ -316,11 +321,7 @@ namespace WinZoneTrigger
 
         private void AppWatchTimerTick(object sender, EventArgs e)
         {
-            if (ReloadConfigIfChanged())
-            {
-                StartInitialScan();
-                return;
-            }
+            ReloadConfigIfChanged();
 
             if (_startupRetryActive)
             {
@@ -338,19 +339,19 @@ namespace WinZoneTrigger
             {
                 return;
             }
-            if (_scanInProgress || _appWatchInProgress || _zoneActionInProgress)
+            if (_scanInProgress || _appWatchInProgress || _zoneActionInProgress || _wifiRecoveryInProgress)
             {
                 DiagnosticsLog.WriteEvent("백그라운드 위치 확인 건너뜀: 다른 자동 작업 진행 중");
                 return;
             }
 
             _scanInProgress = true;
-            DiagnosticsLog.WriteEvent(startupOnly ? "백그라운드 시작 위치 확인" : "백그라운드 위치 조건 확인");
+            DiagnosticsLog.WriteThrottled("scan-start:" + startupOnly, startupOnly ? "백그라운드 시작 위치 확인" : "백그라운드 위치 조건 확인");
 
             Task.Factory.StartNew(delegate
             {
                 return CreateScanSnapshot(forceScan, _config.Zones.Any(z => z.Enabled && z.UseCoordinates));
-            }).ContinueWith(delegate(Task<ScanSnapshot> task)
+            }).ContinueWith(task => _uiContext.Post(delegate
             {
                 _scanInProgress = false;
                 if (task.IsFaulted)
@@ -362,7 +363,7 @@ namespace WinZoneTrigger
                 }
 
                 ProcessScanResult(task.Result, startupOnly);
-            });
+            }, null));
         }
 
         private ScanSnapshot CreateScanSnapshot(bool forceScan, bool requestLocation)
@@ -445,7 +446,7 @@ namespace WinZoneTrigger
                 (snapshot.Networks ?? new List<WifiNetwork>())
                     .Where(n => !string.IsNullOrWhiteSpace(n.Ssid))
                     .Select(n => n.Ssid),
-                StringComparer.OrdinalIgnoreCase);
+                StringComparer.Ordinal);
 
             if (!string.IsNullOrWhiteSpace(snapshot.WifiError))
             {
@@ -466,7 +467,7 @@ namespace WinZoneTrigger
             List<ZoneRule> zonesToTrigger = new List<ZoneRule>();
             bool startupWifiMatchedZoneExists = startupOnly && HasEligibleStartupWifiMatch(visibleSsids, currentLocation);
 
-            DiagnosticsLog.WriteEvent("백그라운드 scan 요약: Wi-Fi="
+            DiagnosticsLog.WriteThrottled("scan", "백그라운드 scan 요약: Wi-Fi="
                 + FormatVisibleSsids(visibleSsids)
                 + " / 위치=" + FormatLocationForLog(currentLocation)
                 + " / startupOnly=" + startupOnly);
@@ -493,7 +494,7 @@ namespace WinZoneTrigger
                     ? actualNear && !IsStartupZoneCompleted(zone)
                     : near && !wasInside);
 
-                DiagnosticsLog.WriteEvent("백그라운드 위치 판정: " + zone.Name
+                DiagnosticsLog.WriteThrottled("zone:" + zone.Id + ":" + near + ":" + eligible, "백그라운드 위치 판정: " + zone.Name
                     + " / enabled=" + zone.Enabled
                     + " / eligible=" + eligible
                     + " / activeBefore=" + wasInside
@@ -685,14 +686,14 @@ namespace WinZoneTrigger
                 for (int attempt = 1; attempt <= 6; attempt++)
                 {
                     Thread.Sleep(3000);
-                    if (_scanInProgress || _appWatchInProgress || _zoneActionInProgress)
+                    if (_scanInProgress || _appWatchInProgress || _zoneActionInProgress || _wifiRecoveryInProgress)
                     {
                         DiagnosticsLog.WriteEvent("follow-up scan 대기: 다른 자동 작업 진행 중 (" + attempt + "/6)");
                         continue;
                     }
 
                     DiagnosticsLog.WriteEvent("follow-up scan 실행: Wi-Fi 연결 이후 조건 재확인");
-                    StartScan(true, false);
+                    _uiContext.Post(delegate { StartScan(true, false); }, null);
                     return;
                 }
 
@@ -738,7 +739,7 @@ namespace WinZoneTrigger
             }
 
             _appWatchInProgress = true;
-            DiagnosticsLog.WriteEvent(reason + " 시작: " + dueTargets.Count + "개 항목");
+            DiagnosticsLog.WriteThrottled("watch-start", reason + " 시작: " + dueTargets.Count + "개 항목");
             UpdateAutomationEvent(reason + " 시작: " + dueTargets.Count + "개 항목", null, "확인 중: " + dueTargets.Count + "개 항목");
             Task.Factory.StartNew(delegate
             {
@@ -771,7 +772,8 @@ namespace WinZoneTrigger
                             DiagnosticsLog.WriteEvent);
                         string itemText = BuildAppWatchStatusText(result.Summary, checkedAtLocal, nextCheckAtLocal);
                         string appWatchText = target.Item1.Name + ": " + itemText;
-                        DiagnosticsLog.WriteEvent(reason + " 결과(" + target.Item1.Name + "): " + itemText);
+                        if (result.LaunchAttempted || !result.MeetsRequirement) DiagnosticsLog.WriteEvent(reason + " 결과(" + target.Item1.Name + "): " + itemText);
+                        else DiagnosticsLog.WriteThrottled("watch:" + target.Item1.Id + ":" + item.Id, reason + " 결과(" + target.Item1.Name + "): " + itemText);
                         UpdateAutomationEvent(
                             reason + " 결과(" + target.Item1.Name + "): " + itemText,
                             null,
@@ -937,114 +939,12 @@ namespace WinZoneTrigger
 
             if (resetState)
             {
-                _insideZones.Clear();
-                _lastAppWatchChecks.Clear();
+                // Keep occupancy across unrelated edits so saving never replays entry actions.
+                foreach (string id in _insideZones.Keys.Where(id => !_config.Zones.Any(z => z.Id == id && z.Enabled)).ToList())
+                    _insideZones.Remove(id);
             }
 
             DiagnosticsLog.WriteEvent("백그라운드 설정 로드: " + reason + " / zones=" + _config.Zones.Count);
-        }
-
-        private void SaveAutomationState(
-            List<string> activeZoneIds,
-            List<string> activeZoneNames,
-            ScanSnapshot snapshot,
-            HashSet<string> visibleSsids,
-            LocationInfo currentLocation,
-            string eventText)
-        {
-            LocationReadResult locationResult = snapshot == null ? null : snapshot.LocationResult;
-            lock (_automationStateLock)
-            {
-                _stateActiveZoneIds = activeZoneIds ?? new List<string>();
-                _stateActiveZoneNames = activeZoneNames ?? new List<string>();
-                _stateCurrentLocation = currentLocation;
-                _stateLocationWasRequested = locationResult != null && locationResult.WasRequested;
-                _stateLocationError = locationResult == null ? "" : locationResult.Error;
-                _stateVisibleSsids = visibleSsids == null
-                    ? new List<string>()
-                    : visibleSsids.OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToList();
-                _stateWifiError = snapshot == null ? "" : snapshot.WifiError;
-                SetLastEventLocked(eventText);
-                SaveAutomationStateLocked();
-            }
-        }
-
-        private void UpdateAutomationEvent(string eventText, string actionText, string appWatchText)
-        {
-            UpdateAutomationEvent(eventText, actionText, appWatchText, "", "", "");
-        }
-
-        private void UpdateAutomationEvent(
-            string eventText,
-            string actionText,
-            string appWatchText,
-            string appWatchZoneId,
-            string appWatchItemId,
-            string appWatchItemText)
-        {
-            lock (_automationStateLock)
-            {
-                SetLastEventLocked(eventText);
-                if (!string.IsNullOrWhiteSpace(actionText))
-                {
-                    _stateLastActionText = actionText;
-                }
-
-                if (!string.IsNullOrWhiteSpace(appWatchText))
-                {
-                    _stateLastAppWatchText = appWatchText;
-                }
-
-                if (!string.IsNullOrWhiteSpace(appWatchZoneId) && !string.IsNullOrWhiteSpace(appWatchItemId))
-                {
-                    _stateLastAppWatchZoneId = appWatchZoneId;
-                    _stateLastAppWatchItemId = appWatchItemId;
-                    _stateLastAppWatchItemText = appWatchItemText ?? "";
-                }
-
-                SaveAutomationStateLocked();
-            }
-        }
-
-        private void SetLastEventLocked(string eventText)
-        {
-            if (string.IsNullOrWhiteSpace(eventText))
-            {
-                return;
-            }
-
-            _stateLastEventAtLocal = DateTime.Now;
-            _stateLastEventText = eventText;
-        }
-
-        private void SaveAutomationStateLocked()
-        {
-            AutomationStateStore.Save(new AutomationStateSnapshot
-            {
-                UpdatedAtLocal = DateTime.Now,
-                ProcessId = Process.GetCurrentProcess().Id,
-                ActiveZoneIds = new List<string>(_stateActiveZoneIds),
-                ActiveZoneNames = new List<string>(_stateActiveZoneNames),
-                CurrentLocation = _stateCurrentLocation,
-                LocationWasRequested = _stateLocationWasRequested,
-                LocationError = _stateLocationError,
-                VisibleSsids = new List<string>(_stateVisibleSsids),
-                WifiError = _stateWifiError,
-                LastEventAtLocal = _stateLastEventAtLocal,
-                LastEventText = _stateLastEventText,
-                LastActionText = _stateLastActionText,
-                LastAppWatchText = _stateLastAppWatchText,
-                LastAppWatchZoneId = _stateLastAppWatchZoneId,
-                LastAppWatchItemId = _stateLastAppWatchItemId,
-                LastAppWatchItemText = _stateLastAppWatchItemText
-            });
-        }
-
-        private static string BuildAppWatchStatusText(string summary, DateTime checkedAtLocal, DateTime nextCheckAtLocal)
-        {
-            return "확인 " + checkedAtLocal.ToString("yyyy-MM-dd HH:mm:ss")
-                + " · 다음 앱 확인 " + nextCheckAtLocal.ToString("yyyy-MM-dd HH:mm:ss")
-                + " · " + (summary ?? "");
         }
 
         private sealed class ZoneMatchResult

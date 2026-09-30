@@ -1,0 +1,20 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "WinZoneTrigger",
+  "version": "1.0.63",
+  "identifier": "com.winzonetrigger.desktop",
+  "build": { "frontendDist": "../desktop" },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [{ "title": "WinZoneTrigger · 나의 공간, 나의 자동화", "width": 1180, "height": 820, "minWidth": 620, "minHeight": 520, "visible": false }],
+    "security": { "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'" }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["../assets/app.ico"],
+    "resources": { "../bin/WinZoneTrigger.Engine.exe": "WinZoneTrigger.Engine.exe" },
+    "shortDescription": "위치별 자동화와 Wi-Fi 자동 복구",
+    "windows": { "nsis": { "installMode": "currentUser", "languages": ["Korean", "English"], "displayLanguageSelector": false, "installerHooks": "installer-hooks.nsh" } }
+  }
+}
